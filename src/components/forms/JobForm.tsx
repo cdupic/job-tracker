@@ -177,40 +177,40 @@ export function JobForm({ job, onClose }: JobFormProps) {
         </div>
       </div>
 
-      {/* URL */}
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor="url">Lien de l'offre</Label>
-        <Input
-          id="url"
-          type="url"
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          placeholder="https://…"
-        />
-      </div>
+       {/* URL */}
+       <div className="flex flex-col gap-1.5">
+         <Label htmlFor="url">Lien de l'offre</Label>
+         <Input
+           id="url"
+           type="text"
+           value={url}
+           onChange={(e) => setUrl(e.target.value)}
+           placeholder="https://…"
+         />
+       </div>
 
-      {/* Contact */}
-      <div className="grid grid-cols-2 gap-4">
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="contact-name">Nom du contact</Label>
-          <Input
-            id="contact-name"
-            value={contactName}
-            onChange={(e) => setContactName(e.target.value)}
-            placeholder="Marie Dupont"
-          />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="contact-email">Email du contact</Label>
-          <Input
-            id="contact-email"
-            type="email"
-            value={contactEmail}
-            onChange={(e) => setContactEmail(e.target.value)}
-            placeholder="marie@example.com"
-          />
-        </div>
-      </div>
+       {/* Contact */}
+       <div className="grid grid-cols-2 gap-4">
+         <div className="flex flex-col gap-1.5">
+           <Label htmlFor="contact-name">Nom du contact</Label>
+           <Input
+             id="contact-name"
+             value={contactName}
+             onChange={(e) => setContactName(e.target.value)}
+             placeholder="Marie Dupont"
+           />
+         </div>
+         <div className="flex flex-col gap-1.5">
+           <Label htmlFor="contact-email">Email du contact</Label>
+           <Input
+             id="contact-email"
+             type="text"
+             value={contactEmail}
+             onChange={(e) => setContactEmail(e.target.value)}
+             placeholder="marie@example.com"
+           />
+         </div>
+       </div>
 
       {/* Notes */}
       <div className="flex flex-col gap-1.5">
