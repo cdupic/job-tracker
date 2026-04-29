@@ -122,7 +122,7 @@ export function JobCard({ job, followUpDays }: JobCardProps) {
               </a>
             )}
             <Badge className={cn(colors.badge, 'ml-1')}>
-              {days}j
+              {days === 0 ? 'aujourd\'hui' : `${days}j`}
             </Badge>
           </div>
         </div>

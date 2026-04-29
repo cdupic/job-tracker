@@ -8,7 +8,7 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
-  closestCorners,
+  pointerWithin,
 } from '@dnd-kit/core'
 import { useJobs, useUpdateJob } from '@/hooks/useJobs'
 import { useSettings } from '@/hooks/useSettings'
@@ -57,7 +57,7 @@ export function KanbanBoard() {
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={closestCorners}
+      collisionDetection={pointerWithin}
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
@@ -72,9 +72,9 @@ export function KanbanBoard() {
         ))}
       </div>
 
-      <DragOverlay>
+      <DragOverlay dropAnimation={null}>
         {activeJob && (
-          <div className="rotate-1 scale-105 shadow-2xl opacity-95">
+          <div className="scale-105 shadow-2xl opacity-95">
             <JobCard job={activeJob} followUpDays={settings.followUpDays} />
           </div>
         )}
