@@ -7,7 +7,8 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Calendar } from '@/components/ui/calendar'
-import { format } from 'date-fns'
+import { format, parseISO } from 'date-fns'
+import { fr } from 'date-fns/locale'
 import { useCreateJob, useUpdateJob, useDeleteJob } from '@/hooks/useJobs'
 import { toast } from '@/hooks/useToast'
 import { todayISO } from '@/lib/utils'
@@ -42,6 +43,9 @@ export function JobForm({ job, onClose }: JobFormProps) {
   const createJob = useCreateJob()
   const updateJob = useUpdateJob()
   const deleteJob = useDeleteJob()
+
+  // Convert date string "YYYY-MM-DD" to local Date object at noon to avoid timezone shift
+  const parsedDate = dateApplied ? new Date(dateApplied + 'T12:00:00') : undefined
 
   const isPending = createJob.isPending || updateJob.isPending
 
@@ -130,15 +134,27 @@ export function JobForm({ job, onClose }: JobFormProps) {
                 )}
               >
                 <CalendarIcon className="mr-2 h-4 w-4" />
-                {dateApplied ? format(new Date(dateApplied), "PPP") : <span>Choisir une date</span>}
+                {dateApplied ? format(parsedDate!, "PPP", { locale: fr }) : <span>Choisir une date</span>}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0 z-[100] bg-card" align="start">
               <Calendar
                 mode="single"
-                selected={dateApplied ? new Date(dateApplied) : undefined}
-                onSelect={(d) => d && setDateApplied(d.toISOString().split('T')[0])}
+                locale={fr}
+                selected={parsedDate}
+                onSelect={(d) => {
+                  if (d) {
+                    // Convert back to local "YYYY-MM-DD" safely
+                    const year = d.getFullYear();
+                    const month = String(d.getMonth() + 1).padStart(2, '0');
+                    const day = String(d.getDate()).padStart(2, '0');
+                    setDateApplied(`${year}-${month}-${day}`);
+                  }
+                }}
                 initialFocus
+                captionLayout="dropdown-buttons"
+                fromYear={2020}
+                toYear={new Date().getFullYear() + 2}
               />
             </PopoverContent>
           </Popover>
