@@ -1,66 +1,62 @@
-// src/repositories/LocalStorageRepository.ts
-import type { JobApplication } from '@/types'
-import type { JobRepository } from './JobRepository'
+// src/repositories/LocalStoragePeriodRepository.ts
+import type { Period } from '@/types'
 
-const STORAGE_KEY = 'jat_applications'
+const STORAGE_KEY = 'jat_periods'
 
-export class LocalStorageRepository implements JobRepository {
-  private readAll(): JobApplication[] {
+export class LocalStoragePeriodRepository {
+  private readAll(): Period[] {
     try {
       const raw = localStorage.getItem(STORAGE_KEY)
       if (!raw) return []
-      return JSON.parse(raw) as JobApplication[]
+      return JSON.parse(raw) as Period[]
     } catch {
       return []
     }
   }
 
-  private writeAll(jobs: JobApplication[]): void {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(jobs))
+  private writeAll(periods: Period[]): void {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(periods))
   }
 
-  async getAll(): Promise<JobApplication[]> {
+  async getAll(): Promise<Period[]> {
     return this.readAll().sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     )
   }
 
-  async getById(id: string): Promise<JobApplication | null> {
-    return this.readAll().find((j) => j.id === id) ?? null
+  async getById(id: string): Promise<Period | null> {
+    return this.readAll().find((p) => p.id === id) ?? null
   }
 
-  async save(
-    job: Omit<JobApplication, 'id' | 'createdAt' | 'updatedAt'>
-  ): Promise<JobApplication> {
+  async save(period: Omit<Period, 'id' | 'createdAt'>): Promise<Period> {
     const now = new Date().toISOString()
-    const newJob: JobApplication = {
-      ...job,
+    const newPeriod: Period = {
+      ...period,
       id: crypto.randomUUID(),
       createdAt: now,
-      updatedAt: now,
     }
     const all = this.readAll()
-    this.writeAll([...all, newJob])
-    return newJob
+    this.writeAll([...all, newPeriod])
+    return newPeriod
   }
 
-  async update(id: string, updates: Partial<JobApplication>): Promise<JobApplication> {
+  async update(id: string, updates: Partial<Period>): Promise<Period> {
     const all = this.readAll()
-    const idx = all.findIndex((j) => j.id === id)
-    if (idx === -1) throw new Error(`Job ${id} not found`)
-    const updated: JobApplication = {
-      ...all[idx],
-      ...updates,
-      id,
-      updatedAt: new Date().toISOString(),
-    }
+    const idx = all.findIndex((p) => p.id === id)
+    if (idx === -1) throw new Error(`Period ${id} not found`)
+    const updated: Period = { ...all[idx], ...updates, id }
     all[idx] = updated
     this.writeAll(all)
     return updated
   }
 
   async delete(id: string): Promise<void> {
-    const all = this.readAll().filter((j) => j.id !== id)
-    this.writeAll(all)
+    this.writeAll(this.readAll().filter((p) => p.id !== id))
+  }
+
+  async saveMany(periods: Period[]): Promise<void> {
+    this.writeAll(periods)
   }
 }
+
+export const periodRepository = new LocalStoragePeriodRepository()
