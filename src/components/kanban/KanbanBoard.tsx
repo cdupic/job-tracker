@@ -25,7 +25,7 @@ export function KanbanBoard() {
   const [activeJob, setActiveJob] = useState<JobApplication | null>(null)
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+      useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   )
 
   function getJobsByStatus(status: JobStatus): JobApplication[] {
@@ -45,10 +45,10 @@ export function KanbanBoard() {
     const jobId = active.id as string
     const overId = over.id as string
 
-    // Check if dropped on a column (status) or another card
-    const newStatus = columns.map(c => c.id).includes(overId as JobStatus)
-      ? (overId as JobStatus)
-      : jobs.find((j) => j.id === overId)?.status
+    const colIds = columns.map((c) => c.id)
+    const newStatus = colIds.includes(overId as JobStatus)
+        ? (overId as JobStatus)
+        : jobs.find((j) => j.id === overId)?.status
 
     const job = jobs.find((j) => j.id === jobId)
     if (!job || !newStatus || job.status === newStatus) return
@@ -57,30 +57,30 @@ export function KanbanBoard() {
   }
 
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={pointerWithin}
-      onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
-    >
-      <div className="flex gap-6 pb-8">
-        {columns.map((col) => (
-          <KanbanColumn
-            key={col.id}
-            status={col.id}
-            jobs={getJobsByStatus(col.id)}
-            followUpDays={settings.followUpDays}
-          />
-        ))}
-      </div>
+      <DndContext
+          sensors={sensors}
+          collisionDetection={pointerWithin}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+      >
+        <div className="flex gap-5 pb-8 items-start">
+          {columns.map((col) => (
+              <KanbanColumn
+                  key={col.id}
+                  status={col.id}
+                  jobs={getJobsByStatus(col.id)}
+                  followUpDays={settings.followUpDays}
+              />
+          ))}
+        </div>
 
-      <DragOverlay dropAnimation={null}>
-        {activeJob && (
-          <div className="scale-105 shadow-2xl opacity-95">
-            <JobCard job={activeJob} followUpDays={settings.followUpDays} />
-          </div>
-        )}
-      </DragOverlay>
-    </DndContext>
+        <DragOverlay dropAnimation={null}>
+          {activeJob && (
+              <div className="scale-105 shadow-2xl opacity-95">
+                <JobCard job={activeJob} followUpDays={settings.followUpDays} />
+              </div>
+          )}
+        </DragOverlay>
+      </DndContext>
   )
 }

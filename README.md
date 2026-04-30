@@ -68,3 +68,5 @@ export const jobRepository: JobRepository = new ApiRepository()
 - 📤 **Export / Import** JSON
 - 🌙 **Mode sombre**
 - 📱 Responsive (desktop + tablette)
+
+
