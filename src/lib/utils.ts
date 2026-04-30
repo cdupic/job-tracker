@@ -7,27 +7,22 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function daysBetween(dateStr: string): number {
-  // Parse la date comme si c'était en heure locale
   const [year, month, day] = dateStr.split('-').map(Number)
   const date = new Date(year, month - 1, day)
-
-  // Obtient la date actuelle en heure locale
   const now = new Date()
-
-  // Réinitialise les heures pour avoir une comparaison au jour près
   date.setHours(0, 0, 0, 0)
   now.setHours(0, 0, 0, 0)
-
   const diff = now.getTime() - date.getTime()
   return Math.floor(diff / (1000 * 60 * 60 * 24))
 }
 
-export function formatDate(dateStr: string): string {
-  return new Intl.DateTimeFormat('fr-FR', {
+export function formatDate(dateStr: string, locale = 'fr-FR'): string {
+  const [year, month, day] = dateStr.split('-').map(Number)
+  return new Intl.DateTimeFormat(locale, {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
-  }).format(new Date(dateStr))
+  }).format(new Date(year, month - 1, day))
 }
 
 export function todayISO(): string {

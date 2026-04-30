@@ -4,11 +4,13 @@ import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { ExternalLink, AlertCircle, User } from 'lucide-react'
 import { cn, daysBetween, formatDate } from '@/lib/utils'
-import { type JobApplication, COLUMN_COLOR_STYLES, FALLBACK_COLOR_STYLE } from '@/types'
+import { type JobApplication, COLUMN_COLOR_STYLES, FALLBACK_COLOR_STYLE, PERIOD_COLOR_STYLES } from '@/types'
+import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { JobForm } from '@/components/forms/JobForm'
 import { useKanbanConfig } from '@/hooks/useKanbanConfig'
+import { usePeriods } from '@/hooks/usePeriods'
 import { useI18n } from '@/i18n'
 
 interface JobCardProps {
@@ -22,9 +24,12 @@ export function JobCard({ job, followUpDays }: JobCardProps) {
   const days = daysBetween(job.dateApplied)
   const needsFollowUp = job.status === 'applied' && days >= followUpDays
   const { columns } = useKanbanConfig()
+  const { data: periods = [] } = usePeriods()
 
   const col = columns.find((c) => c.id === job.status)
   const colors = col ? COLUMN_COLOR_STYLES[col.color] : FALLBACK_COLOR_STYLE
+
+  const period = periods.find((p) => p.id === job.periodId)
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: job.id,
@@ -44,111 +49,117 @@ export function JobCard({ job, followUpDays }: JobCardProps) {
             {...listeners}
             onClick={() => setOpen(true)}
             className={cn(
-                'group relative bg-card border border-border/60 rounded-xl p-3.5 cursor-pointer select-none',
-                'hover:border-border hover:shadow-sm transition-all duration-150',
-                isDragging && 'opacity-40 shadow-lg scale-[0.98]'
+                'group relative bg-card border border-border rounded-lg p-3.5 cursor-pointer',
+                'hover:border-foreground/20 hover:shadow-sm transition-all duration-150',
+                'animate-slide-up',
+                isDragging && 'opacity-40 ring-1 ring-primary shadow-lg scale-[0.98]'
             )}
         >
-          {/* Colored left accent bar */}
-          <span
-              className={cn('absolute left-0 top-3 bottom-3 w-[3px] rounded-full', colors.dot)}
-              style={{ marginLeft: '-1px' }}
-          />
-
           {/* Follow-up warning */}
           {needsFollowUp && (
               <div className="absolute top-3 right-3 flex items-center gap-1">
-            <span className="relative flex h-1.5 w-1.5">
+            <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-orange-500" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-500" />
             </span>
-                <span className="text-[10px] font-mono text-orange-500">{t.card.followUp}</span>
+                <span className="text-[10px] font-mono text-orange-500 font-medium">{t.card.followUp}</span>
+              </div>
+          )}
+
+          {/* Period chip */}
+          {period && (
+              <div className="mb-2">
+            <span className={cn(
+                'inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-medium border',
+                PERIOD_COLOR_STYLES[period.color].badge,
+                PERIOD_COLOR_STYLES[period.color].border
+            )}>
+              <span className={cn('h-1 w-1 rounded-full', PERIOD_COLOR_STYLES[period.color].dot)} />
+              {period.name}
+            </span>
               </div>
           )}
 
           {/* Company */}
-          <p className="font-semibold text-[13px] text-foreground leading-tight pr-16 truncate pl-2">
+          <p className="font-semibold text-[13px] text-foreground leading-tight pr-16 truncate">
             {job.company}
           </p>
 
           {/* Role */}
-          <p className="text-[11px] text-muted-foreground mt-0.5 truncate pl-2">{job.role}</p>
+          <p className="text-xs text-muted-foreground mt-0.5 truncate">{job.role}</p>
 
           {/* Footer */}
-          <div className="flex items-center justify-between mt-3 pl-2">
-          <span className="text-[10px] font-mono text-muted-foreground/60">
+          <div className="flex items-center justify-between mt-3">
+          <span className="text-[10px] font-mono text-muted-foreground">
             {formatDate(job.dateApplied, t.intlLocale)}
           </span>
 
             <div className="flex items-center gap-1.5">
-              {/* Contact popover */}
               {job.contact && (job.contact.name || job.contact.email) && (
                   <Popover>
                     <PopoverTrigger asChild>
                       <button
                           onClick={(e) => e.stopPropagation()}
-                          className="flex items-center justify-center h-5 w-5 rounded hover:bg-muted text-muted-foreground/40 hover:text-muted-foreground transition-colors"
+                          className="flex items-center justify-center h-5 w-5 rounded-md hover:bg-muted text-muted-foreground/60 hover:text-foreground transition-colors"
+                          title={t.card.contactUnknown}
                       >
                         <User className="h-3 w-3" />
                       </button>
                     </PopoverTrigger>
                     <PopoverContent
                         onClick={(e) => e.stopPropagation()}
-                        className="w-60 p-4 z-[100] bg-card shadow-xl border-border rounded-xl"
+                        className="w-64 p-4 z-[100] bg-card flex flex-col gap-2 shadow-xl border-border rounded-xl"
                     >
-                      <div className="flex items-center gap-3 mb-3">
-                        <div className="h-8 w-8 shrink-0 bg-muted flex items-center justify-center rounded-full text-sm font-semibold text-foreground">
-                          {job.contact.name ? job.contact.name.charAt(0).toUpperCase() : '?'}
+                      <div className="flex items-center gap-3 border-b border-border pb-3 mb-1">
+                        <div className="h-10 w-10 shrink-0 bg-primary/10 text-primary flex items-center justify-center rounded-full font-display text-lg">
+                          {job.contact.name ? job.contact.name.charAt(0).toUpperCase() : <User className="h-5 w-5" />}
                         </div>
                         <div className="flex flex-col overflow-hidden">
-                      <span className="font-medium text-[13px] text-foreground truncate">
+                      <span className="font-semibold text-sm text-foreground truncate">
                         {job.contact.name || t.card.contactUnknown}
                       </span>
                           {job.contact.email && (
                               <a
                                   href={`mailto:${job.contact.email}`}
-                                  className="text-[11px] text-muted-foreground hover:text-primary transition-colors truncate"
+                                  className="text-xs text-muted-foreground hover:text-primary transition-colors truncate mt-0.5"
                               >
                                 {job.contact.email}
                               </a>
                           )}
                         </div>
                       </div>
-                      <div className="flex justify-between text-[11px] text-muted-foreground border-t border-border pt-2 mt-1">
-                        <span>{t.card.sentOn}</span>
-                        <span className="font-mono text-foreground">
-                      {formatDate(job.dateApplied, t.intlLocale)}
-                    </span>
+                      <div className="flex flex-col gap-1 mt-1 text-xs">
+                        <div className="flex justify-between items-center text-muted-foreground">
+                          <span>{t.card.sentOn}</span>
+                          <span className="font-medium text-foreground font-mono">
+                        {formatDate(job.dateApplied, t.intlLocale)}
+                      </span>
+                        </div>
                       </div>
                     </PopoverContent>
                   </Popover>
               )}
-
-              {/* External link */}
               {job.url && (
                   <a
                       href={job.url}
                       target="_blank"
                       rel="noopener noreferrer"
                       onClick={(e) => e.stopPropagation()}
-                      className="text-muted-foreground/40 hover:text-muted-foreground transition-colors"
+                      className="text-muted-foreground/60 hover:text-foreground transition-colors"
                   >
                     <ExternalLink className="h-3 w-3" />
                   </a>
               )}
-
-              {/* Days counter */}
-              <span className="text-[10px] font-mono text-muted-foreground/50 tabular-nums">
-              {days === 0 ? t.card.today : `${days}j`}
-            </span>
+              <Badge className={cn(colors.badge, 'ml-1')}>
+                {days === 0 ? t.card.today : `${days}d`}
+              </Badge>
             </div>
           </div>
 
-          {/* Notes preview */}
           {job.notes && (
-              <div className="mt-2 pl-2 flex items-start gap-1.5">
-                <AlertCircle className="h-3 w-3 text-muted-foreground/30 shrink-0 mt-0.5" />
-                <p className="text-[10px] text-muted-foreground/40 line-clamp-1">{job.notes}</p>
+              <div className="mt-2 flex items-start gap-1">
+                <AlertCircle className="h-3 w-3 text-muted-foreground/40 shrink-0 mt-0.5" />
+                <p className="text-[10px] text-muted-foreground/60 line-clamp-1">{job.notes}</p>
               </div>
           )}
         </div>
@@ -157,9 +168,9 @@ export function JobCard({ job, followUpDays }: JobCardProps) {
           <DialogContent className="max-w-xl">
             <DialogHeader>
               <DialogTitle>
-                {job.company}
+                {job.company}{' '}
                 <span className="text-muted-foreground font-sans font-normal text-base">
-                {' '}· {job.role}
+                · {job.role}
               </span>
               </DialogTitle>
             </DialogHeader>
