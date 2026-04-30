@@ -1,6 +1,6 @@
 // src/repositories/ApiRepository.ts
 import type { JobApplication } from '@/types'
-import type { JobRepository } from './JobRepository'
+import type { JobRepository } from './JobRepository.ts'
 
 export class ApiRepository implements JobRepository {
   async getAll(): Promise<JobApplication[]> {

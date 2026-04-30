@@ -23,7 +23,7 @@ export function CompaniesPage() {
     )
 
     // Also show companies inferred from jobs that have no profile yet
-    const jobCompanyNames = [...new Set(allJobs.map((j) => j.company.toLowerCase().trim()))]
+    const jobCompanyNames = [...new Set(allJobs.filter((j) => !!j.company).map((j) => j.company.toLowerCase().trim()))]
     const missingCompanyNames = jobCompanyNames.filter(
         (name) => !companies.some((c) => c.name === name)
     )

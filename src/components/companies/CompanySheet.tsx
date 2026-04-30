@@ -149,9 +149,6 @@ export function CompanySheet({ companyId, companyName, jobId, onClose }: Company
                         <p className="text-xs text-muted-foreground mt-0.5">{company?.sector}</p>
                     )}
                 </div>
-                <button onClick={onClose} className="h-7 w-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors ml-4 shrink-0">
-                    <X className="h-4 w-4" />
-                </button>
             </div>
 
             {/* Scrollable body */}

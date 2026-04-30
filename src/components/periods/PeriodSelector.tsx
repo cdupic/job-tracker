@@ -2,9 +2,9 @@
 import { cn } from '@/lib/utils'
 import { usePeriods } from '@/hooks/usePeriods'
 import { useActivePeriod } from '@/hooks/useActivePeriod'
-import { PERIOD_COLOR_STYLES } from '@/types'
 import { useI18n } from '@/i18n'
 import { Layers } from 'lucide-react'
+import { PERIOD_COLOR_STYLES, type PeriodColor } from '@/types'
 
 export function PeriodSelector() {
     const { data: periods = [] } = usePeriods()
@@ -30,7 +30,7 @@ export function PeriodSelector() {
             </button>
 
             {periods.map((period) => {
-                const colors = PERIOD_COLOR_STYLES[period.color]
+                const colors = PERIOD_COLOR_STYLES[period.color as PeriodColor] ?? PERIOD_COLOR_STYLES.blue
                 const isActive = activePeriodId === period.id
                 return (
                     <button
