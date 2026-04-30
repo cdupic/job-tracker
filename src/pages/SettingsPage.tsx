@@ -1,41 +1,40 @@
 // src/pages/SettingsPage.tsx
 import { useRef, useState } from 'react'
 import { useSettings } from '@/hooks/useSettings'
-import { useJobs, useImportJobs } from '@/hooks/useJobs'
-import { usePeriods, useCreatePeriod, useDeletePeriod, useUpdatePeriod } from '@/hooks/usePeriods'
+import { useJobs, useFullImport } from '@/hooks/useJobs'
+import { usePeriods } from '@/hooks/usePeriods'
+import { useCompanies } from '@/hooks/useCompanies'
 import { toast } from '@/hooks/useToast'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { PeriodForm } from '@/components/periods/PeriodForm'
-import { type JobApplication, type ExportData, PERIOD_COLOR_STYLES } from '@/types'
-import { Download, Upload, Check, Loader2, Plus, Pencil } from 'lucide-react'
+import { type ExportData, PERIOD_COLOR_STYLES } from '@/types'
+import { Download, Upload, Check, Loader2, Plus, Pencil, AlertTriangle } from 'lucide-react'
 import { cn, formatDate } from '@/lib/utils'
 import { useI18n } from '@/i18n'
 import { useKanbanConfig } from '@/hooks/useKanbanConfig'
-import { periodRepository } from '@/repositories/LocalStoragePeriodRepository'
-import { companyRepository } from '@/repositories/LocalStorageCompanyRepository'
 
 export function SettingsPage() {
   const { settings, setSettings } = useSettings()
   const { data: jobs = [] } = useJobs()
   const { data: periods = [] } = usePeriods()
-  const importMutation = useImportJobs()
+  const { data: companies = [] } = useCompanies()
+  const fullImport = useFullImport()
   const { columns, setColumns } = useKanbanConfig()
   const fileRef = useRef<HTMLInputElement>(null)
   const { t } = useI18n()
 
   const [importConfirm, setImportConfirm] = useState<{
-    jobs: JobApplication[]
-    cols?: any[]
-    version: number
+    data: ExportData
+    isV2: boolean
   } | null>(null)
 
-  // Period management
   const [periodDialogOpen, setPeriodDialogOpen] = useState(false)
   const [editingPeriod, setEditingPeriod] = useState<any>(null)
 
+  // ── Export ─────────────────────────────────────────────────────────────────
   function handleExport() {
     const date = new Date().toISOString().split('T')[0]
     const exportData: ExportData = {
@@ -43,7 +42,7 @@ export function SettingsPage() {
       columns,
       applications: jobs,
       periods,
-      companies: [], // loaded async — fine for now
+      companies,
     }
     const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
@@ -55,6 +54,7 @@ export function SettingsPage() {
     toast({ title: t.toast.exported, description: t.toast.exportedDesc(jobs.length) })
   }
 
+  // ── Import parsing ─────────────────────────────────────────────────────────
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -62,15 +62,25 @@ export function SettingsPage() {
     reader.onload = (ev) => {
       try {
         const parsed = JSON.parse(ev.target?.result as string) as any
-        let importData = null
+
         if (Array.isArray(parsed)) {
-          importData = { version: 1, jobs: parsed as JobApplication[] }
+          // v1 — tableau brut de candidatures
+          setImportConfirm({
+            data: {
+              version: 2,
+              columns,
+              applications: parsed,
+              periods: [],
+              companies: [],
+            },
+            isV2: false,
+          })
         } else if (parsed.version === 2 && Array.isArray(parsed.applications)) {
-          importData = { version: 2, jobs: parsed.applications as JobApplication[], cols: parsed.columns }
+          // v2 — format complet
+          setImportConfirm({ data: parsed as ExportData, isV2: true })
         } else {
           throw new Error('Invalid format')
         }
-        setImportConfirm(importData)
       } catch {
         toast({ title: t.toast.invalidFile, variant: 'destructive' })
       }
@@ -79,13 +89,21 @@ export function SettingsPage() {
     e.target.value = ''
   }
 
+  // ── Import confirmation ────────────────────────────────────────────────────
   async function confirmImport() {
     if (!importConfirm) return
-    await importMutation.mutateAsync(importConfirm.jobs)
-    if (importConfirm.version === 2 && importConfirm.cols) {
-      setColumns(importConfirm.cols)
+    const { data, isV2 } = importConfirm
+
+    await fullImport.mutateAsync({ data, isV2 })
+
+    if (isV2 && data.columns?.length) {
+      setColumns(data.columns)
     }
-    toast({ title: t.toast.imported, description: t.toast.importedDesc(importConfirm.jobs.length) })
+
+    toast({
+      title: t.toast.imported,
+      description: t.toast.importedDesc(data.applications.length),
+    })
     setImportConfirm(null)
   }
 
@@ -96,7 +114,7 @@ export function SettingsPage() {
           <p className="text-sm text-muted-foreground mt-1">{t.settings.subtitle}</p>
         </div>
 
-        {/* Follow-up setting */}
+        {/* Follow-up */}
         <section className="bg-card border border-border rounded-xl p-6 mb-4">
           <h2 className="text-sm font-semibold mb-4">{t.settings.followUpSection}</h2>
           <div className="flex items-center gap-4">
@@ -118,7 +136,7 @@ export function SettingsPage() {
           </div>
         </section>
 
-        {/* Periods management */}
+        {/* Periods */}
         <section className="bg-card border border-border rounded-xl p-6 mb-4">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-sm font-semibold">{t.periods.settingsSection}</h2>
@@ -147,7 +165,7 @@ export function SettingsPage() {
           ) : (
               <div className="flex flex-col gap-2">
                 {periods.map((period) => {
-                  const colors = PERIOD_COLOR_STYLES[period.color]
+                  const colors = PERIOD_COLOR_STYLES[period.color] ?? PERIOD_COLOR_STYLES.blue
                   const jobCount = jobs.filter((j) => j.periodId === period.id).length
                   return (
                       <div
@@ -188,6 +206,7 @@ export function SettingsPage() {
           <h2 className="text-sm font-semibold mb-4">{t.settings.dataSection}</h2>
 
           <div className="flex flex-col gap-3">
+            {/* Export */}
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm">{t.settings.exportLabel}</p>
@@ -201,6 +220,7 @@ export function SettingsPage() {
 
             <div className="border-t border-border" />
 
+            {/* Import */}
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm">{t.settings.importLabel}</p>
@@ -213,20 +233,52 @@ export function SettingsPage() {
               <input ref={fileRef} type="file" accept=".json" className="hidden" onChange={handleFileChange} />
             </div>
 
+            {/* Confirmation block */}
             {importConfirm && (
-                <div className="mt-2 p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg">
-                  <p className="text-sm font-medium text-amber-800 dark:text-amber-300">{t.settings.confirmTitle}</p>
-                  <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
-                    {importConfirm.version === 2
-                        ? t.settings.confirmDescV2(importConfirm.jobs.length, importConfirm.cols?.length || 0, jobs.length)
-                        : t.settings.confirmDescV1(importConfirm.jobs.length, jobs.length)}
-                  </p>
-                  <div className="flex gap-2 mt-3">
-                    <Button size="sm" onClick={confirmImport} disabled={importMutation.isPending}>
-                      {importMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                <div className="mt-2 p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg flex flex-col gap-3">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                    <div className="flex flex-col gap-1">
+                      <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+                        {t.settings.confirmTitle}
+                      </p>
+                      <p className="text-xs text-amber-700 dark:text-amber-400">
+                        {importConfirm.isV2 ? (
+                            <>
+                              Cet import remplacera toutes vos données actuelles par :{' '}
+                              <span className="font-semibold text-amber-900 dark:text-amber-200">
+                          {importConfirm.data.applications.length} candidature{importConfirm.data.applications.length > 1 ? 's' : ''}
+                        </span>
+                              {(importConfirm.data.periods?.length ?? 0) > 0 && (
+                                  <>, {' '}
+                                    <span className="font-semibold text-amber-900 dark:text-amber-200">
+                              {importConfirm.data.periods!.length} période{importConfirm.data.periods!.length > 1 ? 's' : ''}
+                            </span>
+                                  </>
+                              )}
+                              {(importConfirm.data.companies?.length ?? 0) > 0 && (
+                                  <>, {' '}
+                                    <span className="font-semibold text-amber-900 dark:text-amber-200">
+                              {importConfirm.data.companies!.length} entreprise{importConfirm.data.companies!.length > 1 ? 's' : ''}
+                            </span>
+                                  </>
+                              )}
+                              . Vos données actuelles ({jobs.length} candidature{jobs.length > 1 ? 's' : ''}) seront perdues.
+                            </>
+                        ) : (
+                            t.settings.confirmDescV1(importConfirm.data.applications.length, jobs.length)
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={confirmImport} disabled={fullImport.isPending}>
+                      {fullImport.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                       {t.settings.confirm}
                     </Button>
-                    <Button size="sm" variant="ghost" onClick={() => setImportConfirm(null)}>{t.settings.cancel}</Button>
+                    <Button size="sm" variant="ghost" onClick={() => setImportConfirm(null)}>
+                      {t.settings.cancel}
+                    </Button>
                   </div>
                 </div>
             )}
@@ -251,4 +303,4 @@ export function SettingsPage() {
         </Dialog>
       </div>
   )
-}
+} 

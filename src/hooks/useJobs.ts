@@ -1,7 +1,9 @@
 // src/hooks/useJobs.ts
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { jobRepository } from '@/repositories'
-import type { JobApplication } from '@/types'
+import { periodRepository } from '@/repositories/LocalStoragePeriodRepository'
+import { companyRepository } from '@/repositories/LocalStorageCompanyRepository'
+import type { JobApplication, ExportData } from '@/types'
 
 const QUERY_KEY = ['jobs'] as const
 
@@ -24,7 +26,7 @@ export function useCreateJob() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (job: Omit<JobApplication, 'id' | 'createdAt' | 'updatedAt'>) =>
-      jobRepository.save(job),
+        jobRepository.save(job),
     onSuccess: () => qc.invalidateQueries({ queryKey: QUERY_KEY }),
   })
 }
@@ -33,7 +35,7 @@ export function useUpdateJob() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ id, updates }: { id: string; updates: Partial<JobApplication> }) =>
-      jobRepository.update(id, updates),
+        jobRepository.update(id, updates),
     onSuccess: () => qc.invalidateQueries({ queryKey: QUERY_KEY }),
   })
 }
@@ -46,43 +48,39 @@ export function useDeleteJob() {
   })
 }
 
-export function useImportJobs() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: async (jobs: JobApplication[]) => {
-      // Overwrite all — clear + re-insert each job directly
-      const existing = await jobRepository.getAll()
-      for (const j of existing) {
-        await jobRepository.delete(j.id)
-      }
-      for (const j of jobs) {
-        await jobRepository.save({
-          company: j.company,
-          role: j.role,
-          url: j.url,
-          status: j.status,
-          dateApplied: j.dateApplied,
-          contact: j.contact,
-          notes: j.notes,
-        })
-      }
-    },
-    onSuccess: () => qc.invalidateQueries({ queryKey: QUERY_KEY }),
-  })
-}
-
-
 export function useDeleteJobsByPeriod() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (periodId: string) => {
       const all = await jobRepository.getAll()
       const toDelete = all.filter((j) => j.periodId === periodId)
-      for (const j of toDelete) {
-        await jobRepository.delete(j.id)
-      }
+      for (const j of toDelete) await jobRepository.delete(j.id)
       return toDelete.length
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: QUERY_KEY }),
+  })
+}
+
+// Import complet — préserve les IDs pour que companyId/periodId restent valides
+export function useFullImport() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ data, isV2 }: { data: ExportData; isV2: boolean }) => {
+      // Toujours remplacer les candidatures (IDs préservés)
+      await jobRepository.saveMany(data.applications)
+
+      if (isV2) {
+        // Remplacer périodes et entreprises avec leurs IDs originaux
+        if (data.periods) await periodRepository.saveMany(data.periods)
+        if (data.companies) await companyRepository.saveMany(data.companies)
+      }
+    },
+    onSuccess: (_result, { isV2 }) => {
+      qc.invalidateQueries({ queryKey: QUERY_KEY })
+      if (isV2) {
+        qc.invalidateQueries({ queryKey: ['periods'] })
+        qc.invalidateQueries({ queryKey: ['companies'] })
+      }
+    },
   })
 }

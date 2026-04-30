@@ -59,4 +59,9 @@ export class LocalStorageJobRepository implements JobRepository {
     async delete(id: string): Promise<void> {
         this.writeAll(this.readAll().filter((j) => j.id !== id))
     }
+
+    // Écrase tout le tableau en préservant les IDs existants
+    async saveMany(jobs: JobApplication[]): Promise<void> {
+        this.writeAll(jobs)
+    }
 }
