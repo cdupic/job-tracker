@@ -70,3 +70,19 @@ export function useImportJobs() {
     onSuccess: () => qc.invalidateQueries({ queryKey: QUERY_KEY }),
   })
 }
+
+
+export function useDeleteJobsByPeriod() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (periodId: string) => {
+      const all = await jobRepository.getAll()
+      const toDelete = all.filter((j) => j.periodId === periodId)
+      for (const j of toDelete) {
+        await jobRepository.delete(j.id)
+      }
+      return toDelete.length
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: QUERY_KEY }),
+  })
+}
