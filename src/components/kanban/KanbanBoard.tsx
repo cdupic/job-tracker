@@ -12,7 +12,8 @@ import {
 } from '@dnd-kit/core'
 import { useJobs, useUpdateJob } from '@/hooks/useJobs'
 import { useSettings } from '@/hooks/useSettings'
-import { STATUS_ORDER, type JobApplication, type JobStatus } from '@/types'
+import { useKanbanConfig } from '@/hooks/useKanbanConfig'
+import { type JobApplication, type JobStatus } from '@/types'
 import { KanbanColumn } from './KanbanColumn'
 import { JobCard } from './JobCard'
 
@@ -20,6 +21,7 @@ export function KanbanBoard() {
   const { data: jobs = [] } = useJobs()
   const updateJob = useUpdateJob()
   const { settings } = useSettings()
+  const { columns } = useKanbanConfig()
   const [activeJob, setActiveJob] = useState<JobApplication | null>(null)
 
   const sensors = useSensors(
@@ -44,7 +46,7 @@ export function KanbanBoard() {
     const overId = over.id as string
 
     // Check if dropped on a column (status) or another card
-    const newStatus = STATUS_ORDER.includes(overId as JobStatus)
+    const newStatus = columns.map(c => c.id).includes(overId as JobStatus)
       ? (overId as JobStatus)
       : jobs.find((j) => j.id === overId)?.status
 
@@ -62,11 +64,11 @@ export function KanbanBoard() {
       onDragEnd={handleDragEnd}
     >
       <div className="flex gap-6 pb-8">
-        {STATUS_ORDER.map((status) => (
+        {columns.map((col) => (
           <KanbanColumn
-            key={status}
-            status={status}
-            jobs={getJobsByStatus(status)}
+            key={col.id}
+            status={col.id}
+            jobs={getJobsByStatus(col.id)}
             followUpDays={settings.followUpDays}
           />
         ))}

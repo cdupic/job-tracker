@@ -4,6 +4,7 @@ import { Plus, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { KanbanBoard } from '@/components/kanban/KanbanBoard'
+import { KanbanConfigModal } from '@/components/kanban/KanbanConfigModal'
 import { JobForm } from '@/components/forms/JobForm'
 import { useJobs } from '@/hooks/useJobs'
 import { useI18n } from '@/i18n'
@@ -20,10 +21,13 @@ export function BoardPage() {
             <h1 className="font-display text-3xl text-foreground">{t.board.title}</h1>
             <p className="text-sm text-muted-foreground mt-1">{t.board.subtitle}</p>
           </div>
-          <Button onClick={() => setOpen(true)} size="sm">
-            <Plus className="h-4 w-4" />
-            {t.board.newButton}
-          </Button>
+          <div className="flex items-center gap-3">
+            <KanbanConfigModal />
+            <Button onClick={() => setOpen(true)} size="sm">
+              <Plus className="h-4 w-4" />
+              {t.board.newButton}
+            </Button>
+          </div>
         </div>
 
         {isLoading ? (

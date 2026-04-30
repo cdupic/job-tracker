@@ -9,6 +9,7 @@ import { StatsPage } from '@/pages/StatsPage'
 import { SettingsPage } from '@/pages/SettingsPage'
 import { Toaster } from '@/components/ui/Toaster'
 import { I18nProvider, useI18n, LOCALES, type AppLocale } from '@/i18n'
+import { KanbanConfigProvider } from '@/hooks/useKanbanConfig'
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 0 } },
@@ -154,12 +155,14 @@ function AppShell() {
 export default function App() {
   return (
       <I18nProvider>
-        <QueryClientProvider client={queryClient}>
-          <BrowserRouter>
-            <AppShell />
-            <Toaster />
-          </BrowserRouter>
-        </QueryClientProvider>
+        <KanbanConfigProvider>
+          <QueryClientProvider client={queryClient}>
+            <BrowserRouter>
+              <AppShell />
+              <Toaster />
+            </BrowserRouter>
+          </QueryClientProvider>
+        </KanbanConfigProvider>
       </I18nProvider>
   )
 }

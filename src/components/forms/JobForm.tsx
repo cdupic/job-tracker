@@ -11,10 +11,11 @@ import { format } from 'date-fns'
 import { useCreateJob, useUpdateJob, useDeleteJob } from '@/hooks/useJobs'
 import { toast } from '@/hooks/useToast'
 import { todayISO } from '@/lib/utils'
-import { STATUS_ORDER, type JobApplication, type JobStatus } from '@/types'
+import { type JobApplication, type JobStatus } from '@/types'
 import { Trash2, Loader2, CalendarIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useI18n } from '@/i18n'
+import { useKanbanConfig } from '@/hooks/useKanbanConfig'
 
 interface JobFormProps {
   job?: JobApplication
@@ -30,12 +31,13 @@ interface FormErrors {
 export function JobForm({ job, onClose }: JobFormProps) {
   const isEdit = !!job
   const { t } = useI18n()
+  const { columns } = useKanbanConfig()
 
   const [company, setCompany] = useState(job?.company ?? '')
   const [role, setRole] = useState(job?.role ?? '')
   const [url, setUrl] = useState(job?.url ?? '')
   const [dateApplied, setDateApplied] = useState(job?.dateApplied ?? todayISO())
-  const [status, setStatus] = useState<JobStatus>(job?.status ?? 'applied')
+  const [status, setStatus] = useState<JobStatus>(job?.status ?? columns[0]?.id ?? 'applied')
   const [contactName, setContactName] = useState(job?.contact?.name ?? '')
   const [contactEmail, setContactEmail] = useState(job?.contact?.email ?? '')
   const [notes, setNotes] = useState(job?.notes ?? '')
@@ -168,9 +170,9 @@ export function JobForm({ job, onClose }: JobFormProps) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {STATUS_ORDER.map((s) => (
-                    <SelectItem key={s} value={s}>
-                      {t.status[s]}
+                {columns.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.label}
                     </SelectItem>
                 ))}
               </SelectContent>

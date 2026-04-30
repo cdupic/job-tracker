@@ -1,10 +1,11 @@
 // src/pages/StatsPage.tsx
 import { useJobs } from '@/hooks/useJobs'
 import { StatsBar } from '@/components/stats/StatsBar'
-import { STATUS_ORDER, type JobStatus } from '@/types'
+import { type JobStatus } from '@/types'
 import { daysBetween } from '@/lib/utils'
 import { Loader2 } from 'lucide-react'
 import { useI18n } from '@/i18n'
+import { useKanbanConfig } from '@/hooks/useKanbanConfig'
 
 interface StatCardProps {
     label: string
@@ -25,6 +26,7 @@ function StatCard({ label, value, sub }: StatCardProps) {
 export function StatsPage() {
     const { data: jobs = [], isLoading } = useJobs()
     const { t } = useI18n()
+    const { columns } = useKanbanConfig()
 
     if (isLoading) {
         return (
@@ -35,7 +37,7 @@ export function StatsPage() {
     }
 
     const total = jobs.length
-    const countByStatus = STATUS_ORDER.reduce<Record<JobStatus, number>>(
+    const countByStatus = columns.map(c => c.id).reduce<Record<JobStatus, number>>(
         (acc, s) => ({ ...acc, [s]: jobs.filter((j) => j.status === s).length }),
         {} as Record<JobStatus, number>
     )
@@ -85,7 +87,7 @@ export function StatsPage() {
                     <p className="text-sm text-muted-foreground text-center py-8">{t.stats.empty}</p>
                 ) : (
                     <div className="flex flex-col gap-4">
-                        {STATUS_ORDER.map((s) => (
+                        {columns.map(c => c.id).map((s) => (
                             <StatsBar key={s} status={s} count={countByStatus[s]} max={maxCount} />
                         ))}
                     </div>

@@ -4,11 +4,12 @@ import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { ExternalLink, AlertCircle, User } from 'lucide-react'
 import { cn, daysBetween, formatDate } from '@/lib/utils'
-import { STATUS_COLORS, type JobApplication } from '@/types'
+import { type JobApplication, COLUMN_COLOR_STYLES, FALLBACK_COLOR_STYLE } from '@/types'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { JobForm } from '@/components/forms/JobForm'
+import { useKanbanConfig } from '@/hooks/useKanbanConfig'
 import { useI18n } from '@/i18n'
 
 interface JobCardProps {
@@ -21,7 +22,10 @@ export function JobCard({ job, followUpDays }: JobCardProps) {
   const { t } = useI18n()
   const days = daysBetween(job.dateApplied)
   const needsFollowUp = job.status === 'applied' && days >= followUpDays
-  const colors = STATUS_COLORS[job.status]
+  const { columns } = useKanbanConfig()
+
+  const col = columns.find(c => c.id === job.status)
+  const colors = col ? COLUMN_COLOR_STYLES[col.color] : FALLBACK_COLOR_STYLE
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: job.id,

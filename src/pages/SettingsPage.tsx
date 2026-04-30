@@ -6,21 +6,35 @@ import { toast } from '@/hooks/useToast'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { type JobApplication } from '@/types'
+import { type JobApplication, type ExportData } from '@/types'
 import { Download, Upload, Check, Loader2 } from 'lucide-react'
 import { useI18n } from '@/i18n'
+import { useKanbanConfig } from '@/hooks/useKanbanConfig'
 
 export function SettingsPage() {
   const { settings, setSettings } = useSettings()
   const { data: jobs = [] } = useJobs()
   const importMutation = useImportJobs()
+  const { columns, setColumns } = useKanbanConfig()
   const fileRef = useRef<HTMLInputElement>(null)
-  const [importConfirm, setImportConfirm] = useState<JobApplication[] | null>(null)
+
+  const [importConfirm, setImportConfirm] = useState<{
+    jobs: JobApplication[]
+    cols?: any[]
+    version: number
+  } | null>(null)
   const { t } = useI18n()
 
   function handleExport() {
     const date = new Date().toISOString().split('T')[0]
-    const blob = new Blob([JSON.stringify(jobs, null, 2)], { type: 'application/json' })
+
+    const exportData: ExportData = {
+      version: 2,
+      columns,
+      applications: jobs
+    }
+
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -36,9 +50,27 @@ export function SettingsPage() {
     const reader = new FileReader()
     reader.onload = (ev) => {
       try {
-        const parsed = JSON.parse(ev.target?.result as string) as unknown
-        if (!Array.isArray(parsed)) throw new Error('Invalid format')
-        setImportConfirm(parsed as JobApplication[])
+        const parsed = JSON.parse(ev.target?.result as string) as any
+
+        let importData = null;
+        if (Array.isArray(parsed)) {
+          // v1 format
+          importData = {
+            version: 1,
+            jobs: parsed as JobApplication[]
+          }
+        } else if (parsed.version === 2 && Array.isArray(parsed.applications)) {
+          // v2 format
+          importData = {
+            version: 2,
+            jobs: parsed.applications as JobApplication[],
+            cols: parsed.columns
+          }
+        } else {
+          throw new Error('Invalid format')
+        }
+
+        setImportConfirm(importData)
       } catch {
         toast({ title: t.toast.invalidFile, variant: 'destructive' })
       }
@@ -49,8 +81,13 @@ export function SettingsPage() {
 
   async function confirmImport() {
     if (!importConfirm) return
-    await importMutation.mutateAsync(importConfirm)
-    toast({ title: t.toast.imported, description: t.toast.importedDesc(importConfirm.length) })
+    await importMutation.mutateAsync(importConfirm.jobs)
+
+    if (importConfirm.version === 2 && importConfirm.cols) {
+      setColumns(importConfirm.cols)
+    }
+
+    toast({ title: t.toast.imported, description: t.toast.importedDesc(importConfirm.jobs.length) })
     setImportConfirm(null)
   }
 
@@ -125,7 +162,9 @@ export function SettingsPage() {
                     {t.settings.confirmTitle}
                   </p>
                   <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
-                    {t.settings.confirmDesc(importConfirm.length, jobs.length)}
+                    {importConfirm.version === 2
+                      ? t.settings.confirmDescV2(importConfirm.jobs.length, importConfirm.cols?.length || 0, jobs.length)
+                      : t.settings.confirmDescV1(importConfirm.jobs.length, jobs.length)}
                   </p>
                   <div className="flex gap-2 mt-3">
                     <Button size="sm" onClick={confirmImport} disabled={importMutation.isPending}>

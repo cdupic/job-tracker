@@ -2,9 +2,10 @@
 import { useDroppable } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { cn } from '@/lib/utils'
-import { STATUS_COLORS, type JobApplication, type JobStatus } from '@/types'
+import { type JobApplication, type JobStatus, COLUMN_COLOR_STYLES, FALLBACK_COLOR_STYLE } from '@/types'
 import { JobCard } from './JobCard'
 import { useI18n } from '@/i18n'
+import { useKanbanConfig } from '@/hooks/useKanbanConfig'
 
 interface KanbanColumnProps {
     status: JobStatus
@@ -15,7 +16,11 @@ interface KanbanColumnProps {
 export function KanbanColumn({ status, jobs, followUpDays }: KanbanColumnProps) {
     const { setNodeRef, isOver } = useDroppable({ id: status })
     const { t } = useI18n()
-    const colors = STATUS_COLORS[status]
+    const { columns } = useKanbanConfig()
+
+    const col = columns.find(c => c.id === status)
+    const colors = col ? COLUMN_COLOR_STYLES[col.color] : FALLBACK_COLOR_STYLE
+    const label = col?.label || status
 
     const sortedJobs = [...jobs].sort(
         (a, b) => new Date(b.dateApplied).getTime() - new Date(a.dateApplied).getTime()
@@ -28,7 +33,7 @@ export function KanbanColumn({ status, jobs, followUpDays }: KanbanColumnProps) 
                 <div className="flex items-center gap-2">
                     <span className={cn('h-2 w-2 rounded-full shrink-0', colors.dot)} />
                     <h2 className="text-xs font-semibold uppercase tracking-widest text-foreground/70">
-                        {t.status[status]}
+                        {label}
                     </h2>
                 </div>
                 {jobs.length > 0 && (
