@@ -1,72 +1,75 @@
-# JAT — Job Application Tracker
+# JAT — Périodes & Fiches Entreprises
 
-Un outil minimaliste pour suivre vos candidatures d'emploi.
-
-## Démarrage rapide
-
-```bash
-pnpm install
-pnpm dev
-```
-
-Ouvrir [http://localhost:5173](http://localhost:5173) dans le navigateur.
-
-## Build production
-
-```bash
-pnpm build
-pnpm preview
-```
-
-## Stack technique
-
-- **React 18** + **TypeScript** (strict mode)
-- **Vite** — build tool
-- **Tailwind CSS v3** — styling
-- **TanStack Query v5** — gestion d'état asynchrone
-- **@dnd-kit** — drag & drop
-- **React Router v6** — routing
-- **Radix UI** — composants accessibles
-
-## Architecture
-
-Le projet utilise le **Repository Pattern** :
+## Fichiers à créer (nouveaux)
 
 ```
-UI Components
-    ↓ (hooks seulement)
-useJobs() / useSettings()
-    ↓ (TanStack Query)
-jobRepository
-    ↓ (interface)
-LocalStorageRepository   ←→   ApiRepository (stub)
+src/types/index.ts                          ← remplace l'existant
+src/lib/utils.ts                            ← remplace l'existant (formatDate accepte locale)
+src/i18n/index.tsx                          ← remplace l'existant
+src/App.tsx                                 ← remplace l'existant
+
+src/repositories/LocalStoragePeriodRepository.ts   ← NOUVEAU
+src/repositories/LocalStorageCompanyRepository.ts  ← NOUVEAU
+
+src/hooks/usePeriods.ts                     ← NOUVEAU
+src/hooks/useCompanies.ts                   ← NOUVEAU
+src/hooks/useActivePeriod.tsx               ← NOUVEAU
+
+src/components/periods/PeriodSelector.tsx   ← NOUVEAU
+src/components/periods/PeriodForm.tsx       ← NOUVEAU
+
+src/components/companies/CompanySheet.tsx   ← NOUVEAU
+src/components/companies/CompanyCard.tsx    ← NOUVEAU
+
+src/components/forms/JobForm.tsx            ← remplace l'existant
+src/components/kanban/JobCard.tsx           ← remplace l'existant
+src/components/kanban/KanbanBoard.tsx       ← remplace l'existant
+
+src/pages/BoardPage.tsx                     ← remplace l'existant
+src/pages/SettingsPage.tsx                  ← remplace l'existant
+src/pages/CompaniesPage.tsx                 ← NOUVEAU
 ```
 
-**Pour connecter un vrai backend**, il suffit de changer **une seule ligne** dans `src/repositories/index.ts` :
+## Fichiers inchangés
 
-```ts
-// Avant
-export const jobRepository: JobRepository = new LocalStorageRepository()
-
-// Après
-export const jobRepository: JobRepository = new ApiRepository()
+```
+src/main.tsx
+src/index.css
+src/hooks/useJobs.ts
+src/hooks/useKanbanConfig.tsx
+src/hooks/useSettings.ts
+src/hooks/useToast.ts
+src/repositories/index.ts
+src/repositories/LocalStorageRepository.ts
+src/components/kanban/KanbanColumn.tsx
+src/components/kanban/KanbanConfigModal.tsx
+src/components/stats/StatsBar.tsx
+src/components/ui/* (tous)
+src/pages/StatsPage.tsx
 ```
 
-## Routes
+## Ce qui a changé
 
-| Route | Description |
-|---|---|
-| `/` | Tableau Kanban |
-| `/stats` | Dashboard statistiques |
-| `/settings` | Paramètres & export/import |
+### types/index.ts
+- Nouveau type `Period` (id, name, startDate, endDate?, color, createdAt)
+- Nouveau type `CompanyProfile` (id, displayName, name, website, sector, notes, contacts[], createdAt, updatedAt)
+- Nouveau type `CompanyContact` (id, name?, email?, role?)
+- `JobApplication` + champs `periodId?` et `companyId?`
+- Styles de couleurs `PERIOD_COLOR_STYLES` pour les périodes
+- `ExportData` v2 enrichi avec `periods?` et `companies?`
 
-## Fonctionnalités
+### Flux principal
+1. **Créer une période** → Settings → section "Périodes" → bouton "Créer"
+2. **Filtrer le board** → pastilles période au-dessus du kanban
+3. **Assigner une période** → formulaire de candidature → sélecteur de période
+4. **Fiche entreprise depuis une carte** → ouvrir une card → icône Building2 → popup CompanySheet
+5. **Page Entreprises** → sidebar → icône Building2 → grille des fiches
 
-- 🎯 **Kanban board** avec drag & drop entre colonnes
-- 📊 **Dashboard** avec taux de réponse et d'entretien
-- 🔔 **Alertes de relance** configurables
-- 📤 **Export / Import** JSON
-- 🌙 **Mode sombre**
-- 📱 Responsive (desktop + tablette)
+### Matching automatique
+Les candidatures sont rattachées à une fiche entreprise soit par `companyId` (lien explicite),
+soit par correspondance de nom normalisé (`company.toLowerCase().trim() === profile.name`).
+Cela permet de voir l'historique même pour les candidatures créées avant la fiche.
 
-
+### Migration
+Aucune migration nécessaire — les champs `periodId` et `companyId` sont optionnels.
+Les données existantes fonctionnent sans modification.

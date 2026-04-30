@@ -13,6 +13,7 @@ import {
 import { useJobs, useUpdateJob } from '@/hooks/useJobs'
 import { useSettings } from '@/hooks/useSettings'
 import { useKanbanConfig } from '@/hooks/useKanbanConfig'
+import { useActivePeriod } from '@/hooks/useActivePeriod'
 import { type JobApplication, type JobStatus } from '@/types'
 import { KanbanColumn } from './KanbanColumn'
 import { JobCard } from './JobCard'
@@ -22,18 +23,24 @@ export function KanbanBoard() {
   const updateJob = useUpdateJob()
   const { settings } = useSettings()
   const { columns } = useKanbanConfig()
+  const { activePeriodId } = useActivePeriod()
   const [activeJob, setActiveJob] = useState<JobApplication | null>(null)
+
+  // Filter by active period
+  const filteredJobs = activePeriodId
+      ? jobs.filter((j) => j.periodId === activePeriodId)
+      : jobs
 
   const sensors = useSensors(
       useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   )
 
   function getJobsByStatus(status: JobStatus): JobApplication[] {
-    return jobs.filter((j) => j.status === status)
+    return filteredJobs.filter((j) => j.status === status)
   }
 
   function handleDragStart(event: DragStartEvent) {
-    const job = jobs.find((j) => j.id === event.active.id)
+    const job = filteredJobs.find((j) => j.id === event.active.id)
     setActiveJob(job ?? null)
   }
 
@@ -45,12 +52,11 @@ export function KanbanBoard() {
     const jobId = active.id as string
     const overId = over.id as string
 
-    const colIds = columns.map((c) => c.id)
-    const newStatus = colIds.includes(overId as JobStatus)
+    const newStatus = columns.map((c) => c.id).includes(overId as JobStatus)
         ? (overId as JobStatus)
-        : jobs.find((j) => j.id === overId)?.status
+        : filteredJobs.find((j) => j.id === overId)?.status
 
-    const job = jobs.find((j) => j.id === jobId)
+    const job = filteredJobs.find((j) => j.id === jobId)
     if (!job || !newStatus || job.status === newStatus) return
 
     updateJob.mutate({ id: jobId, updates: { status: newStatus } })
@@ -63,7 +69,7 @@ export function KanbanBoard() {
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
       >
-        <div className="flex gap-5 pb-8 items-start">
+        <div className="flex gap-6 pb-8">
           {columns.map((col) => (
               <KanbanColumn
                   key={col.id}

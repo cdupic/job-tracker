@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { KanbanBoard } from '@/components/kanban/KanbanBoard'
 import { KanbanConfigModal } from '@/components/kanban/KanbanConfigModal'
 import { JobForm } from '@/components/forms/JobForm'
+import { PeriodSelector } from '@/components/periods/PeriodSelector'
 import { useJobs } from '@/hooks/useJobs'
 import { useI18n } from '@/i18n'
 
@@ -16,7 +17,7 @@ export function BoardPage() {
 
   return (
       <div className="flex flex-col h-full">
-        <div className="flex items-end justify-between mb-8">
+        <div className="flex items-end justify-between mb-4">
           <div>
             <h1 className="font-display text-3xl text-foreground">{t.board.title}</h1>
             <p className="text-sm text-muted-foreground mt-1">{t.board.subtitle}</p>
@@ -28,6 +29,11 @@ export function BoardPage() {
               {t.board.newButton}
             </Button>
           </div>
+        </div>
+
+        {/* Period filter */}
+        <div className="mb-6">
+          <PeriodSelector />
         </div>
 
         {isLoading ? (
