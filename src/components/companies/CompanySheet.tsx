@@ -1,6 +1,6 @@
-// src/components/companies/CompanySheet.tsx
 import { useState } from 'react'
-import { X, Globe, Plus, Trash2, Loader2, ExternalLink, User, Mail, Briefcase, Clock, TrendingUp, Hash } from 'lucide-react'
+import { Globe, Plus, Trash2, Loader2, ExternalLink, User, Mail, AlertTriangle, X } from 'lucide-react'
+import { cn, formatDate, daysBetween, ensureUrl } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -18,11 +18,11 @@ import { toast } from '@/hooks/useToast'
 import { type CompanyContact, COLUMN_COLOR_STYLES, FALLBACK_COLOR_STYLE, PERIOD_COLOR_STYLES } from '@/types'
 import { useKanbanConfig } from '@/hooks/useKanbanConfig'
 import { useI18n } from '@/i18n'
-import { cn, formatDate, daysBetween, ensureUrl } from '@/lib/utils'
+
 interface CompanySheetProps {
-    companyId?: string          // existing company
-    companyName?: string        // pre-fill name if creating
-    jobId?: string              // the job card that opened this sheet
+    companyId?: string
+    companyName?: string
+    jobId?: string
     onClose: () => void
 }
 
@@ -37,15 +37,17 @@ export function CompanySheet({ companyId, companyName, jobId, onClose }: Company
     const deleteCompany = useDeleteCompany()
     const updateJob = useUpdateJob()
 
-    // Edit state
     const [displayName, setDisplayName] = useState('')
     const [website, setWebsite] = useState('')
     const [sector, setSector] = useState('')
     const [notes, setNotes] = useState('')
     const [contacts, setContacts] = useState<CompanyContact[]>([])
     const [isEditing, setIsEditing] = useState(!companyId)
+    const [duplicateError, setDuplicateError] = useState('')
 
-    // Sync edit state when company loads
+    // Confirmation suppression
+    const [confirmDelete, setConfirmDelete] = useState(false)
+
     const [initialized, setInitialized] = useState(false)
     if (company && !initialized) {
         setDisplayName(company.displayName)
@@ -59,17 +61,15 @@ export function CompanySheet({ companyId, companyName, jobId, onClose }: Company
         setInitialized(true)
     }
 
-    // Jobs linked to this company (by companyId, or by name matching)
     const linkedJobs = allJobs.filter((j) => {
         if (companyId && j.companyId === companyId) return true
         if (company && j.company.toLowerCase().trim() === company.name) return true
         return false
     })
 
-    // Stats
     const respondedJobs = linkedJobs.filter((j) => j.status !== 'applied' && j.status !== 'abandoned')
-    const avgResponseDays = respondedJobs.length === 0 ? null :
-        Math.round(respondedJobs.reduce((acc, j) => acc + daysBetween(j.dateApplied), 0) / respondedJobs.length)
+    const avgResponseDays = respondedJobs.length === 0 ? null
+        : Math.round(respondedJobs.reduce((acc, j) => acc + daysBetween(j.dateApplied), 0) / respondedJobs.length)
 
     function addContact() {
         setContacts([...contacts, { id: crypto.randomUUID() }])
@@ -85,6 +85,7 @@ export function CompanySheet({ companyId, companyName, jobId, onClose }: Company
 
     async function handleSave() {
         if (!displayName.trim()) return
+        setDuplicateError('')
 
         const payload = {
             displayName: displayName.trim(),
@@ -94,26 +95,45 @@ export function CompanySheet({ companyId, companyName, jobId, onClose }: Company
             contacts,
         }
 
-        let savedId = companyId
-        if (companyId) {
-            await updateCompany.mutateAsync({ id: companyId, updates: payload })
-            toast({ title: t.companies.toastUpdated })
-        } else {
-            const created = await createCompany.mutateAsync({ ...payload, name: payload.displayName.toLowerCase().trim() })
-            savedId = created.id
-            toast({ title: t.companies.toastCreated })
-        }
+        try {
+            let savedId = companyId
+            if (companyId) {
+                await updateCompany.mutateAsync({ id: companyId, updates: payload })
+                toast({ title: t.companies.toastUpdated })
+            } else {
+                const created = await createCompany.mutateAsync({
+                    ...payload,
+                    name: payload.displayName.toLowerCase().trim(),
+                })
+                savedId = created.id
+                toast({ title: t.companies.toastCreated })
+            }
 
-        // Link the job that opened this sheet
-        if (jobId && savedId) {
-            await updateJob.mutateAsync({ id: jobId, updates: { companyId: savedId } })
-        }
+            if (jobId && savedId) {
+                await updateJob.mutateAsync({ id: jobId, updates: { companyId: savedId } })
+            }
 
-        setIsEditing(false)
+            setIsEditing(false)
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : ''
+            if (msg.startsWith('DUPLICATE_COMPANY:')) {
+                setDuplicateError(`Une fiche existe déjà pour "${displayName.trim()}".`)
+            } else {
+                throw err
+            }
+        }
     }
 
-    async function handleDelete() {
+    // Suppression : d'abord détacher les jobs (mettre companyId à undefined),
+    // puis supprimer la fiche
+    async function handleConfirmDelete() {
         if (!companyId) return
+
+        // Détacher tous les jobs liés
+        for (const job of linkedJobs) {
+            await updateJob.mutateAsync({ id: job.id, updates: { companyId: undefined } })
+        }
+
         await deleteCompany.mutateAsync(companyId)
         toast({ title: t.companies.toastDeleted, variant: 'destructive' })
         onClose()
@@ -128,31 +148,114 @@ export function CompanySheet({ companyId, companyName, jobId, onClose }: Company
     }
 
     const isPending = createCompany.isPending || updateCompany.isPending
+    const isDeleting = deleteCompany.isPending
 
+    // ── Écran de confirmation suppression ──────────────────────────────────────
+    if (confirmDelete) {
+        return (
+            <div className="flex flex-col gap-5">
+                <div className="flex items-start gap-3 p-4 rounded-lg bg-destructive/10 border border-destructive/20">
+                    <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+                    <div className="flex flex-col gap-1.5">
+                        <p className="text-sm font-semibold text-destructive">
+                            Supprimer « {company?.displayName ?? displayName} » ?
+                        </p>
+                        {linkedJobs.length > 0 ? (
+                            <>
+                                <p className="text-sm text-muted-foreground">
+                                    Cette fiche est liée à{' '}
+                                    <span className="font-semibold text-foreground">
+                                        {linkedJobs.length} candidature{linkedJobs.length > 1 ? 's' : ''}
+                                    </span>
+                                    {' '}:
+                                </p>
+                                <ul className="flex flex-col gap-1 mt-1">
+                                    {linkedJobs.slice(0, 5).map(j => (
+                                        <li key={j.id} className="text-xs text-muted-foreground flex items-center gap-1.5">
+                                            <span className="h-1 w-1 rounded-full bg-muted-foreground/40 shrink-0" />
+                                            {j.role} — {formatDate(j.dateApplied, t.intlLocale)}
+                                        </li>
+                                    ))}
+                                    {linkedJobs.length > 5 && (
+                                        <li className="text-xs text-muted-foreground/60 italic">
+                                            + {linkedJobs.length - 5} autre{linkedJobs.length - 5 > 1 ? 's' : ''}…
+                                        </li>
+                                    )}
+                                </ul>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                    Ces candidatures ne seront <span className="font-semibold">pas supprimées</span> — elles seront simplement détachées de cette fiche.
+                                </p>
+                            </>
+                        ) : (
+                            <p className="text-sm text-muted-foreground">
+                                Aucune candidature liée. Cette action est irréversible.
+                            </p>
+                        )}
+                    </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-1 border-t border-border">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setConfirmDelete(false)}
+                        disabled={isDeleting}
+                    >
+                        Annuler
+                    </Button>
+                    <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={handleConfirmDelete}
+                        disabled={isDeleting}
+                    >
+                        {isDeleting
+                            ? <Loader2 className="h-4 w-4 animate-spin" />
+                            : <Trash2 className="h-4 w-4" />}
+                        {linkedJobs.length > 0
+                            ? `Supprimer (détacher ${linkedJobs.length} candidature${linkedJobs.length > 1 ? 's' : ''})`
+                            : 'Supprimer la fiche'}
+                    </Button>
+                </div>
+            </div>
+        )
+    }
+
+    // ── Fiche normale ──────────────────────────────────────────────────────────
     return (
         <div className="flex flex-col h-full max-h-[85vh] overflow-hidden">
             {/* Header */}
             <div className="flex items-start justify-between pb-4 border-b border-border shrink-0">
-                <div>
+                <div className="flex-1 min-w-0">
                     {isEditing ? (
-                        <Input
-                            value={displayName}
-                            onChange={(e) => setDisplayName(e.target.value)}
-                            placeholder={t.companies.namePlaceholder}
-                            className="font-display text-xl h-auto py-1 px-2 -ml-2 border-0 border-b rounded-none focus-visible:ring-0 text-foreground"
-                        />
+                        <div className="flex flex-col gap-1">
+                            <Input
+                                value={displayName}
+                                onChange={(e) => { setDisplayName(e.target.value); setDuplicateError('') }}
+                                placeholder={t.companies.namePlaceholder}
+                                className={cn(
+                                    'font-display text-xl h-auto py-1 px-2 -ml-2 border-0 border-b rounded-none focus-visible:ring-0 text-foreground',
+                                    duplicateError ? 'border-destructive' : ''
+                                )}
+                            />
+                            {duplicateError && (
+                                <p className="text-xs text-destructive flex items-center gap-1">
+                                    <AlertTriangle className="h-3 w-3" />
+                                    {duplicateError}
+                                </p>
+                            )}
+                        </div>
                     ) : (
                         <h2 className="font-display text-xl text-foreground">{company?.displayName ?? displayName}</h2>
                     )}
-                    {(company?.sector || (isEditing && sector)) && !isEditing && (
-                        <p className="text-xs text-muted-foreground mt-0.5">{company?.sector}</p>
+                    {!isEditing && company?.sector && (
+                        <p className="text-xs text-muted-foreground mt-0.5">{company.sector}</p>
                     )}
                 </div>
             </div>
 
             {/* Scrollable body */}
             <div className="flex-1 overflow-y-auto py-4 flex flex-col gap-5">
-
                 {/* Stats row */}
                 {linkedJobs.length > 0 && (
                     <div className="grid grid-cols-3 gap-2">
@@ -288,7 +391,6 @@ export function CompanySheet({ companyId, companyName, jobId, onClose }: Company
                                     const col = columns.find((c) => c.id === job.status)
                                     const colors = col ? COLUMN_COLOR_STYLES[col.color] : FALLBACK_COLOR_STYLE
                                     const period = periods.find((p) => p.id === job.periodId)
-
                                     return (
                                         <div key={job.id} className="flex items-center gap-3 p-2.5 rounded-lg bg-muted/30 hover:bg-muted/60 transition-colors">
                                             <div className="flex flex-col gap-0.5 flex-1 min-w-0">
@@ -300,9 +402,9 @@ export function CompanySheet({ companyId, companyName, jobId, onClose }: Company
                                                             PERIOD_COLOR_STYLES[period.color].badge,
                                                             PERIOD_COLOR_STYLES[period.color].border
                                                         )}>
-                              <span className={cn('h-1 w-1 rounded-full', PERIOD_COLOR_STYLES[period.color].dot)} />
+                                                            <span className={cn('h-1 w-1 rounded-full', PERIOD_COLOR_STYLES[period.color].dot)} />
                                                             {period.name}
-                            </span>
+                                                        </span>
                                                     )}
                                                 </div>
                                                 <p className="text-[10px] font-mono text-muted-foreground">{formatDate(job.dateApplied, t.intlLocale)}</p>
@@ -316,7 +418,7 @@ export function CompanySheet({ companyId, companyName, jobId, onClose }: Company
                 )}
             </div>
 
-            {/* Footer actions */}
+            {/* Footer */}
             <div className="flex items-center justify-between pt-4 border-t border-border shrink-0">
                 {isEditing && companyId ? (
                     <Button
@@ -324,10 +426,9 @@ export function CompanySheet({ companyId, companyName, jobId, onClose }: Company
                         variant="ghost"
                         size="sm"
                         className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                        onClick={handleDelete}
-                        disabled={deleteCompany.isPending}
+                        onClick={() => setConfirmDelete(true)}
                     >
-                        {deleteCompany.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                        <Trash2 className="h-4 w-4" />
                         {t.form.delete}
                     </Button>
                 ) : <div />}
@@ -335,14 +436,20 @@ export function CompanySheet({ companyId, companyName, jobId, onClose }: Company
                 <div className="flex gap-2">
                     {isEditing ? (
                         <>
-                            {companyId && <Button variant="outline" size="sm" onClick={() => setIsEditing(false)}>{t.form.cancel}</Button>}
+                            {companyId && (
+                                <Button variant="outline" size="sm" onClick={() => { setIsEditing(false); setDuplicateError('') }}>
+                                    {t.form.cancel}
+                                </Button>
+                            )}
                             <Button size="sm" onClick={handleSave} disabled={isPending}>
                                 {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
                                 {t.form.save}
                             </Button>
                         </>
                     ) : (
-                        <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>{t.companies.edit}</Button>
+                        <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
+                            {t.companies.edit}
+                        </Button>
                     )}
                 </div>
             </div>
