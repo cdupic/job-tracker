@@ -7,4 +7,5 @@ export interface JobRepository {
   save(job: Omit<JobApplication, 'id' | 'createdAt' | 'updatedAt'>): Promise<JobApplication>
   update(id: string, updates: Partial<JobApplication>): Promise<JobApplication>
   delete(id: string): Promise<void>
+  saveMany(jobs: JobApplication[]): Promise<void>
 }

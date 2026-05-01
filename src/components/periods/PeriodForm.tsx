@@ -6,9 +6,10 @@ import { Label } from '@/components/ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Calendar } from '@/components/ui/calendar'
 import { format } from 'date-fns'
-import { CalendarIcon, Loader2, Trash2 } from 'lucide-react'
+import { AlertTriangle, CalendarIcon, Loader2, Trash2 } from 'lucide-react'
 import { cn, todayISO } from '@/lib/utils'
 import { useCreatePeriod, useUpdatePeriod, useDeletePeriod } from '@/hooks/usePeriods'
+import { useJobs, useDeleteJobsByPeriod } from '@/hooks/useJobs'
 import { toast } from '@/hooks/useToast'
 import { ALL_PERIOD_COLORS, PERIOD_COLOR_STYLES, type Period, type PeriodColor } from '@/types'
 import { useI18n } from '@/i18n'
@@ -27,12 +28,20 @@ export function PeriodForm({ period, onClose }: PeriodFormProps) {
     const [startDate, setStartDate] = useState(period?.startDate ?? todayISO())
     const [endDate, setEndDate] = useState(period?.endDate ?? '')
     const [nameError, setNameError] = useState('')
+    const [confirmDelete, setConfirmDelete] = useState(false)
+
+    const { data: allJobs = [] } = useJobs()
+    const affectedCount = period
+        ? allJobs.filter((j) => j.periodId === period.id).length
+        : 0
 
     const createPeriod = useCreatePeriod()
     const updatePeriod = useUpdatePeriod()
     const deletePeriod = useDeletePeriod()
+    const deleteJobsByPeriod = useDeleteJobsByPeriod()
 
     const isPending = createPeriod.isPending || updatePeriod.isPending
+    const isDeleting = deletePeriod.isPending || deleteJobsByPeriod.isPending
 
     function parseDate(str: string) {
         if (!str) return undefined
@@ -49,12 +58,7 @@ export function PeriodForm({ period, onClose }: PeriodFormProps) {
         if (!name.trim()) { setNameError(t.periods.errorName); return }
         setNameError('')
 
-        const payload = {
-            name: name.trim(),
-            color,
-            startDate,
-            endDate: endDate || undefined,
-        }
+        const payload = { name: name.trim(), color, startDate, endDate: endDate || undefined }
 
         if (isEdit) {
             await updatePeriod.mutateAsync({ id: period.id, updates: payload })
@@ -66,16 +70,75 @@ export function PeriodForm({ period, onClose }: PeriodFormProps) {
         onClose()
     }
 
-    async function handleDelete() {
+    async function handleConfirmDelete() {
         if (!period) return
+        if (affectedCount > 0) {
+            await deleteJobsByPeriod.mutateAsync(period.id)
+        }
         await deletePeriod.mutateAsync(period.id)
         toast({ title: t.periods.toastDeleted, variant: 'destructive' })
         onClose()
     }
 
+    // ── Confirmation screen ───────────────────────────────────────────────────
+    if (confirmDelete) {
+        return (
+            <div className="flex flex-col gap-5">
+                <div className="flex items-start gap-3 p-4 rounded-lg bg-destructive/10 border border-destructive/20">
+                    <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+                    <div className="flex flex-col gap-1">
+                        <p className="text-sm font-semibold text-destructive">
+                            Supprimer « {period?.name} » ?
+                        </p>
+                        {affectedCount > 0 ? (
+                            <p className="text-sm text-muted-foreground">
+                                Cette action supprimera définitivement{' '}
+                                <span className="font-semibold text-foreground">
+                                    {affectedCount} candidature{affectedCount > 1 ? 's' : ''}
+                                </span>{' '}
+                                associée{affectedCount > 1 ? 's' : ''} à cette période.
+                                Cette action est irréversible.
+                            </p>
+                        ) : (
+                            <p className="text-sm text-muted-foreground">
+                                Aucune candidature ne sera supprimée. Cette action est irréversible.
+                            </p>
+                        )}
+                    </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-1 border-t border-border">
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setConfirmDelete(false)}
+                        disabled={isDeleting}
+                    >
+                        Annuler
+                    </Button>
+                    <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        onClick={handleConfirmDelete}
+                        disabled={isDeleting}
+                    >
+                        {isDeleting
+                            ? <Loader2 className="h-4 w-4 animate-spin" />
+                            : <Trash2 className="h-4 w-4" />}
+                        {affectedCount > 0
+                            ? `Supprimer la période et ${affectedCount} candidature${affectedCount > 1 ? 's' : ''}`
+                            : 'Supprimer la période'}
+                    </Button>
+                </div>
+            </div>
+        )
+    }
+
+    // ── Normal form ───────────────────────────────────────────────────────────
     return (
         <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-            {/* Name */}
             <div className="flex flex-col gap-1.5">
                 <Label htmlFor="period-name">{t.periods.nameLabel}</Label>
                 <Input
@@ -88,7 +151,6 @@ export function PeriodForm({ period, onClose }: PeriodFormProps) {
                 {nameError && <p className="text-xs text-destructive">{nameError}</p>}
             </div>
 
-            {/* Color picker */}
             <div className="flex flex-col gap-1.5">
                 <Label>{t.periods.colorLabel}</Label>
                 <div className="flex gap-2 flex-wrap">
@@ -108,7 +170,6 @@ export function PeriodForm({ period, onClose }: PeriodFormProps) {
                 </div>
             </div>
 
-            {/* Dates */}
             <div className="grid grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1.5">
                     <Label>{t.periods.startDateLabel}</Label>
@@ -168,7 +229,6 @@ export function PeriodForm({ period, onClose }: PeriodFormProps) {
                 </div>
             </div>
 
-            {/* Preview badge */}
             <div className="flex items-center gap-2">
                 <span className="text-xs text-muted-foreground">{t.periods.preview}</span>
                 <span className={cn(
@@ -176,13 +236,12 @@ export function PeriodForm({ period, onClose }: PeriodFormProps) {
                     PERIOD_COLOR_STYLES[color].badge,
                     PERIOD_COLOR_STYLES[color].border
                 )}>
-          <span className={cn('h-1.5 w-1.5 rounded-full', PERIOD_COLOR_STYLES[color].dot)} />
+                    <span className={cn('h-1.5 w-1.5 rounded-full', PERIOD_COLOR_STYLES[color].dot)} />
                     {name || t.periods.namePlaceholder}
                     {!endDate && <span className="text-[9px] font-mono px-1 rounded bg-white/20 dark:bg-black/20">{t.periods.active}</span>}
-        </span>
+                </span>
             </div>
 
-            {/* Actions */}
             <div className="flex items-center justify-between pt-1 border-t border-border">
                 {isEdit ? (
                     <Button
@@ -190,10 +249,9 @@ export function PeriodForm({ period, onClose }: PeriodFormProps) {
                         variant="ghost"
                         size="sm"
                         className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                        onClick={handleDelete}
-                        disabled={deletePeriod.isPending}
+                        onClick={() => setConfirmDelete(true)}
                     >
-                        {deletePeriod.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                        <Trash2 className="h-4 w-4" />
                         {t.form.delete}
                     </Button>
                 ) : <div />}

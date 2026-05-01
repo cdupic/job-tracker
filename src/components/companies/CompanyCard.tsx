@@ -1,7 +1,7 @@
 // src/components/companies/CompanyCard.tsx
 import { useState } from 'react'
 import { Globe, Users, Briefcase, TrendingUp, ExternalLink } from 'lucide-react'
-import { cn, daysBetween, formatDate } from '@/lib/utils'
+import { cn, daysBetween, formatDate, ensureUrl } from '@/lib/utils'
 import { type CompanyProfile, type JobApplication, COLUMN_COLOR_STYLES, FALLBACK_COLOR_STYLE, PERIOD_COLOR_STYLES } from '@/types'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -57,7 +57,7 @@ export function CompanyCard({ company, jobs }: CompanyCardProps) {
                     </div>
                     {company.website && (
                         <a
-                            href={company.website}
+                            href={ensureUrl(company.website!)}
                             target="_blank"
                             rel="noopener noreferrer"
                             onClick={(e) => e.stopPropagation()}
