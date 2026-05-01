@@ -32,15 +32,23 @@ export class LocalStorageCompanyRepository {
     }
 
     async save(company: Omit<CompanyProfile, 'id' | 'createdAt' | 'updatedAt'>): Promise<CompanyProfile> {
+        const normalized = company.displayName.toLowerCase().trim()
+        const all = this.readAll()
+
+        // Vérifier doublon
+        const duplicate = all.find((c) => c.name === normalized)
+        if (duplicate) {
+            throw new Error(`DUPLICATE_COMPANY:${duplicate.id}`)
+        }
+
         const now = new Date().toISOString()
         const newCompany: CompanyProfile = {
             ...company,
-            name: company.displayName.toLowerCase().trim(),
+            name: normalized,
             id: crypto.randomUUID(),
             createdAt: now,
             updatedAt: now,
         }
-        const all = this.readAll()
         this.writeAll([...all, newCompany])
         return newCompany
     }
@@ -49,6 +57,16 @@ export class LocalStorageCompanyRepository {
         const all = this.readAll()
         const idx = all.findIndex((c) => c.id === id)
         if (idx === -1) throw new Error(`Company ${id} not found`)
+
+        // Vérifier doublon sur le nouveau nom (en excluant la fiche courante)
+        if (updates.displayName) {
+            const normalized = updates.displayName.toLowerCase().trim()
+            const duplicate = all.find((c) => c.name === normalized && c.id !== id)
+            if (duplicate) {
+                throw new Error(`DUPLICATE_COMPANY:${duplicate.id}`)
+            }
+        }
+
         const updated: CompanyProfile = {
             ...all[idx],
             ...updates,
