@@ -12,7 +12,7 @@ import {
     useCreateCompany,
     useDeleteCompany,
 } from '@/hooks/useCompanies'
-import { useJobs, useUpdateJob } from '@/hooks/useJobs'
+import { useJobs, useUpdateJob, useDeleteJob } from '@/hooks/useJobs'
 import { usePeriods } from '@/hooks/usePeriods'
 import { toast } from '@/hooks/useToast'
 import { type CompanyContact, COLUMN_COLOR_STYLES, FALLBACK_COLOR_STYLE, PERIOD_COLOR_STYLES } from '@/types'
@@ -26,6 +26,114 @@ interface CompanySheetProps {
     onClose: () => void
 }
 
+// ── Delete strategy choice ────────────────────────────────────────────────────
+type DeleteStrategy = 'detach' | 'delete_all'
+
+function DeleteConfirmScreen({
+                                 displayName,
+                                 linkedJobsCount,
+                                 isDeleting,
+                                 onConfirm,
+                                 onCancel,
+                             }: {
+    displayName: string
+    linkedJobsCount: number
+    isDeleting: boolean
+    onConfirm: (strategy: DeleteStrategy) => void
+    onCancel: () => void
+}) {
+    return (
+        <div className="flex flex-col gap-5">
+            <div className="flex items-start gap-3 p-4 rounded-lg bg-destructive/10 border border-destructive/20">
+                <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+                <div className="flex flex-col gap-1">
+                    <p className="text-sm font-semibold text-destructive">
+                        Supprimer « {displayName} » ?
+                    </p>
+                    {linkedJobsCount > 0 ? (
+                        <p className="text-sm text-muted-foreground">
+                            Cette fiche est liée à{' '}
+                            <span className="font-semibold text-foreground">
+                                {linkedJobsCount} candidature{linkedJobsCount > 1 ? 's' : ''}
+                            </span>
+                            . Que souhaitez-vous faire ?
+                        </p>
+                    ) : (
+                        <p className="text-sm text-muted-foreground">
+                            Aucune candidature liée. Cette action est irréversible.
+                        </p>
+                    )}
+                </div>
+            </div>
+
+            {linkedJobsCount > 0 && (
+                <div className="grid grid-cols-1 gap-2">
+                    {/* Option 1 : détacher seulement */}
+                    <button
+                        type="button"
+                        disabled={isDeleting}
+                        onClick={() => onConfirm('detach')}
+                        className="flex flex-col items-start gap-1 p-4 rounded-lg border border-border bg-card hover:border-foreground/30 hover:bg-accent/40 transition-all text-left"
+                    >
+                        <div className="flex items-center gap-2">
+                            <div className="h-7 w-7 rounded-full bg-muted flex items-center justify-center shrink-0">
+                                <X className="h-3.5 w-3.5 text-muted-foreground" />
+                            </div>
+                            <span className="text-sm font-semibold text-foreground">
+                                Supprimer la fiche uniquement
+                            </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground ml-9 leading-snug">
+                            Les {linkedJobsCount} candidature{linkedJobsCount > 1 ? 's restent' : ' reste'} intacte{linkedJobsCount > 1 ? 's' : ''} — la fiche entreprise est simplement détachée. La carte apparaîtra en grisé et pourra être recréée.
+                        </p>
+                    </button>
+
+                    {/* Option 2 : tout supprimer */}
+                    <button
+                        type="button"
+                        disabled={isDeleting}
+                        onClick={() => onConfirm('delete_all')}
+                        className="flex flex-col items-start gap-1 p-4 rounded-lg border border-destructive/30 bg-destructive/5 hover:border-destructive/60 hover:bg-destructive/10 transition-all text-left"
+                    >
+                        <div className="flex items-center gap-2">
+                            {isDeleting
+                                ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                                : (
+                                    <div className="h-7 w-7 rounded-full bg-destructive/10 flex items-center justify-center shrink-0">
+                                        <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                                    </div>
+                                )}
+                            <span className="text-sm font-semibold text-destructive">
+                                Supprimer la fiche et les candidatures
+                            </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground ml-9 leading-snug">
+                            Supprime définitivement la fiche et les {linkedJobsCount} candidature{linkedJobsCount > 1 ? 's' : ''} associée{linkedJobsCount > 1 ? 's' : ''}. Irréversible.
+                        </p>
+                    </button>
+                </div>
+            )}
+
+            <div className="flex items-center justify-between pt-1 border-t border-border">
+                <Button variant="outline" size="sm" onClick={onCancel} disabled={isDeleting}>
+                    Annuler
+                </Button>
+                {linkedJobsCount === 0 && (
+                    <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => onConfirm('detach')}
+                        disabled={isDeleting}
+                    >
+                        {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                        Supprimer
+                    </Button>
+                )}
+            </div>
+        </div>
+    )
+}
+
 export function CompanySheet({ companyId, companyName, jobId, onClose }: CompanySheetProps) {
     const { t } = useI18n()
     const { data: company, isLoading } = useCompany(companyId)
@@ -36,6 +144,7 @@ export function CompanySheet({ companyId, companyName, jobId, onClose }: Company
     const updateCompany = useUpdateCompany()
     const deleteCompany = useDeleteCompany()
     const updateJob = useUpdateJob()
+    const deleteJob = useDeleteJob()
 
     const [displayName, setDisplayName] = useState('')
     const [website, setWebsite] = useState('')
@@ -44,8 +153,6 @@ export function CompanySheet({ companyId, companyName, jobId, onClose }: Company
     const [contacts, setContacts] = useState<CompanyContact[]>([])
     const [isEditing, setIsEditing] = useState(!companyId)
     const [duplicateError, setDuplicateError] = useState('')
-
-    // Confirmation suppression
     const [confirmDelete, setConfirmDelete] = useState(false)
 
     const [initialized, setInitialized] = useState(false)
@@ -124,18 +231,28 @@ export function CompanySheet({ companyId, companyName, jobId, onClose }: Company
         }
     }
 
-    // Suppression : d'abord détacher les jobs (mettre companyId à undefined),
-    // puis supprimer la fiche
-    async function handleConfirmDelete() {
+    async function handleConfirmDelete(strategy: DeleteStrategy) {
         if (!companyId) return
 
-        // Détacher tous les jobs liés
-        for (const job of linkedJobs) {
-            await updateJob.mutateAsync({ id: job.id, updates: { companyId: undefined } })
+        if (strategy === 'delete_all') {
+            // Delete all linked jobs first
+            for (const job of linkedJobs) {
+                await deleteJob.mutateAsync(job.id)
+            }
+        } else {
+            // Just detach: remove companyId from linked jobs
+            for (const job of linkedJobs) {
+                await updateJob.mutateAsync({ id: job.id, updates: { companyId: undefined } })
+            }
         }
 
         await deleteCompany.mutateAsync(companyId)
-        toast({ title: t.companies.toastDeleted, variant: 'destructive' })
+        toast({
+            title: strategy === 'delete_all'
+                ? `Fiche et ${linkedJobs.length} candidature${linkedJobs.length > 1 ? 's' : ''} supprimées`
+                : t.companies.toastDeleted,
+            variant: 'destructive',
+        })
         onClose()
     }
 
@@ -148,80 +265,22 @@ export function CompanySheet({ companyId, companyName, jobId, onClose }: Company
     }
 
     const isPending = createCompany.isPending || updateCompany.isPending
-    const isDeleting = deleteCompany.isPending
+    const isDeleting = deleteCompany.isPending || deleteJob.isPending || updateJob.isPending
 
-    // ── Écran de confirmation suppression ──────────────────────────────────────
+    // ── Delete confirmation screen ─────────────────────────────────────────────
     if (confirmDelete) {
         return (
-            <div className="flex flex-col gap-5">
-                <div className="flex items-start gap-3 p-4 rounded-lg bg-destructive/10 border border-destructive/20">
-                    <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
-                    <div className="flex flex-col gap-1.5">
-                        <p className="text-sm font-semibold text-destructive">
-                            Supprimer « {company?.displayName ?? displayName} » ?
-                        </p>
-                        {linkedJobs.length > 0 ? (
-                            <>
-                                <p className="text-sm text-muted-foreground">
-                                    Cette fiche est liée à{' '}
-                                    <span className="font-semibold text-foreground">
-                                        {linkedJobs.length} candidature{linkedJobs.length > 1 ? 's' : ''}
-                                    </span>
-                                    {' '}:
-                                </p>
-                                <ul className="flex flex-col gap-1 mt-1">
-                                    {linkedJobs.slice(0, 5).map(j => (
-                                        <li key={j.id} className="text-xs text-muted-foreground flex items-center gap-1.5">
-                                            <span className="h-1 w-1 rounded-full bg-muted-foreground/40 shrink-0" />
-                                            {j.role} — {formatDate(j.dateApplied, t.intlLocale)}
-                                        </li>
-                                    ))}
-                                    {linkedJobs.length > 5 && (
-                                        <li className="text-xs text-muted-foreground/60 italic">
-                                            + {linkedJobs.length - 5} autre{linkedJobs.length - 5 > 1 ? 's' : ''}…
-                                        </li>
-                                    )}
-                                </ul>
-                                <p className="text-xs text-muted-foreground mt-1">
-                                    Ces candidatures ne seront <span className="font-semibold">pas supprimées</span> — elles seront simplement détachées de cette fiche.
-                                </p>
-                            </>
-                        ) : (
-                            <p className="text-sm text-muted-foreground">
-                                Aucune candidature liée. Cette action est irréversible.
-                            </p>
-                        )}
-                    </div>
-                </div>
-
-                <div className="flex items-center justify-end gap-2 pt-1 border-t border-border">
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setConfirmDelete(false)}
-                        disabled={isDeleting}
-                    >
-                        Annuler
-                    </Button>
-                    <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={handleConfirmDelete}
-                        disabled={isDeleting}
-                    >
-                        {isDeleting
-                            ? <Loader2 className="h-4 w-4 animate-spin" />
-                            : <Trash2 className="h-4 w-4" />}
-                        {linkedJobs.length > 0
-                            ? `Supprimer (détacher ${linkedJobs.length} candidature${linkedJobs.length > 1 ? 's' : ''})`
-                            : 'Supprimer la fiche'}
-                    </Button>
-                </div>
-            </div>
+            <DeleteConfirmScreen
+                displayName={company?.displayName ?? displayName}
+                linkedJobsCount={linkedJobs.length}
+                isDeleting={isDeleting}
+                onConfirm={handleConfirmDelete}
+                onCancel={() => setConfirmDelete(false)}
+            />
         )
     }
 
-    // ── Fiche normale ──────────────────────────────────────────────────────────
+    // ── Normal sheet ───────────────────────────────────────────────────────────
     return (
         <div className="flex flex-col h-full max-h-[85vh] overflow-hidden">
             {/* Header */}
