@@ -1,7 +1,6 @@
 // src/components/companies/CompanySheet.tsx
 import { useState } from 'react'
 import { X, Globe, Plus, Trash2, Loader2, ExternalLink, User, Mail, Briefcase, Clock, TrendingUp, Hash } from 'lucide-react'
-import { cn, formatDate, daysBetween } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -19,7 +18,7 @@ import { toast } from '@/hooks/useToast'
 import { type CompanyContact, COLUMN_COLOR_STYLES, FALLBACK_COLOR_STYLE, PERIOD_COLOR_STYLES } from '@/types'
 import { useKanbanConfig } from '@/hooks/useKanbanConfig'
 import { useI18n } from '@/i18n'
-
+import { cn, formatDate, daysBetween, ensureUrl } from '@/lib/utils'
 interface CompanySheetProps {
     companyId?: string          // existing company
     companyName?: string        // pre-fill name if creating
@@ -189,7 +188,7 @@ export function CompanySheet({ companyId, companyName, jobId, onClose }: Company
                 {/* Website display */}
                 {!isEditing && company?.website && (
                     <a
-                        href={company.website}
+                        href={ensureUrl(company.website)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"

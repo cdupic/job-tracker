@@ -61,21 +61,53 @@ export function useDeleteJobsByPeriod() {
   })
 }
 
-// Import complet — préserve les IDs pour que companyId/periodId restent valides
+export type ImportStrategy = 'replace' | 'merge'
+
 export function useFullImport() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ data, isV2 }: { data: ExportData; isV2: boolean }) => {
-      // Toujours remplacer les candidatures (IDs préservés)
-      await jobRepository.saveMany(data.applications)
+    mutationFn: async ({
+                         data,
+                         isV2,
+                         strategy,
+                       }: {
+      data: ExportData
+      isV2: boolean
+      strategy: ImportStrategy
+    }) => {
+      if (strategy === 'replace') {
+        // Écrase tout
+        await jobRepository.saveMany(data.applications)
+        if (isV2) {
+          if (data.periods?.length) await periodRepository.saveMany(data.periods)
+          if (data.companies?.length) await companyRepository.saveMany(data.companies)
+        }
+      } else {
+        // Fusion : ajoute uniquement ce qui n'existe pas encore (comparaison par id)
+        const existingJobs = await jobRepository.getAll()
+        const existingJobIds = new Set(existingJobs.map((j) => j.id))
+        const newJobs = data.applications.filter((j) => !existingJobIds.has(j.id))
+        if (newJobs.length) await jobRepository.saveMany([...existingJobs, ...newJobs])
 
-      if (isV2) {
-        // Remplacer périodes et entreprises avec leurs IDs originaux
-        if (data.periods) await periodRepository.saveMany(data.periods)
-        if (data.companies) await companyRepository.saveMany(data.companies)
+        if (isV2) {
+          if (data.periods?.length) {
+            const existingPeriods = await periodRepository.getAll()
+            const existingPeriodIds = new Set(existingPeriods.map((p) => p.id))
+            const newPeriods = data.periods.filter((p) => !existingPeriodIds.has(p.id))
+            if (newPeriods.length)
+              await periodRepository.saveMany([...existingPeriods, ...newPeriods])
+          }
+          if (data.companies?.length) {
+            const existingCompanies = await companyRepository.getAll()
+            const existingCompanyIds = new Set(existingCompanies.map((c) => c.id))
+            const newCompanies = data.companies.filter((c) => !existingCompanyIds.has(c.id))
+            if (newCompanies.length)
+              await companyRepository.saveMany([...existingCompanies, ...newCompanies])
+          }
+        }
       }
     },
-    onSuccess: (_result, { isV2 }) => {
+    onSuccess: (_r, { isV2 }) => {
       qc.invalidateQueries({ queryKey: QUERY_KEY })
       if (isV2) {
         qc.invalidateQueries({ queryKey: ['periods'] })

@@ -42,6 +42,13 @@ const LOCALE_FLAG: Record<AppLocale, string> = {
     de: '🇩🇪',
 }
 
+const LOCALE_NAME: Record<AppLocale, string> = {
+    fr: 'Français',
+    en: 'English',
+    de: 'Deutsch',
+}
+
+
 function LanguageSwitcher() {
     const { locale, setLocale, t } = useI18n()
     const [open, setOpen] = useState(false)
@@ -71,12 +78,7 @@ function LanguageSwitcher() {
                                 )}
                             >
                                 <span>{LOCALE_FLAG[l]}</span>
-                                <span>{t.languageName}</span>
-                                {l !== locale && (
-                                    <span className="text-xs text-muted-foreground ml-auto">
-                    {l === 'fr' ? 'Français' : l === 'en' ? 'English' : 'Deutsch'}
-                  </span>
-                                )}
+                                <span>{LOCALE_NAME[l]}</span>
                             </button>
                         ))}
                     </div>

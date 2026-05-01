@@ -52,6 +52,24 @@ const fr = {
         confirm: 'Confirmer',
         cancel: 'Annuler',
         storageInfo: 'Données stockées localement dans votre navigateur · Aucun compte requis',
+        exportPeriodsLabel: 'Périodes exportées',
+        exportPeriodsAll: 'toutes',
+        exportPeriodsNone: 'aucune période (candidatures sans période uniquement)',
+        exportPeriodsCount: (n: number) => `${n} candidature${n > 1 ? 's' : ''}`,
+        exportPeriodsAll2: 'Toutes les périodes',
+        exportPeriodsFootnote: 'Les candidatures sans période sont toujours incluses.',
+        importFileDetected: 'Fichier détecté',
+        importFileContent: (apps: number, periods: number, companies: number) => {
+            const parts = [`${apps} candidature${apps > 1 ? 's' : ''}`]
+            if (periods > 0) parts.push(`${periods} période${periods > 1 ? 's' : ''}`)
+            if (companies > 0) parts.push(`${companies} entreprise${companies > 1 ? 's' : ''}`)
+            return parts.join(', ') + ' dans ce fichier. Comment voulez-vous procéder\u00a0?'
+        },
+        importMergeTitle: 'Fusionner',
+        importMergeDesc: 'Ajoute les nouvelles entrées sans toucher aux données existantes.',
+        importReplaceTitle: 'Remplacer tout',
+        importReplaceDesc: 'Efface toutes vos données actuelles et les remplace par le fichier.',
+        importCancel: 'Annuler',
     },
     periods: {
         settingsSection: 'Périodes de candidature',
@@ -235,6 +253,24 @@ const en: Translations = {
         confirm: 'Confirm',
         cancel: 'Cancel',
         storageInfo: 'Data stored locally in your browser · No account required',
+        exportPeriodsLabel: 'Exported periods',
+        exportPeriodsAll: 'all',
+        exportPeriodsNone: 'no period (applications without period only)',
+        exportPeriodsCount: (n: number) => `${n} application${n > 1 ? 's' : ''}`,
+        exportPeriodsAll2: 'All periods',
+        exportPeriodsFootnote: 'Applications without a period are always included.',
+        importFileDetected: 'File detected',
+        importFileContent: (apps: number, periods: number, companies: number) => {
+            const parts = [`${apps} application${apps > 1 ? 's' : ''}`]
+            if (periods > 0) parts.push(`${periods} period${periods > 1 ? 's' : ''}`)
+            if (companies > 0) parts.push(`${companies} company`, `${companies > 1 ? 'companies' : 'company'}`)
+            return parts.join(', ') + ' in this file. How do you want to proceed?'
+        },
+        importMergeTitle: 'Merge',
+        importMergeDesc: 'Adds new entries without touching existing data.',
+        importReplaceTitle: 'Replace all',
+        importReplaceDesc: 'Erases all your current data and replaces it with the file.',
+        importCancel: 'Cancel',
     },
     periods: {
         settingsSection: 'Application periods',
@@ -416,6 +452,24 @@ const de: Translations = {
         confirm: 'Bestätigen',
         cancel: 'Abbrechen',
         storageInfo: 'Daten lokal im Browser gespeichert · Kein Konto erforderlich',
+        exportPeriodsLabel: 'Exportierte Phasen',
+        exportPeriodsAll: 'alle',
+        exportPeriodsNone: 'keine Phase (nur Bewerbungen ohne Phase)',
+        exportPeriodsCount: (n: number) => `${n} Bewerbung${n > 1 ? 'en' : ''}`,
+        exportPeriodsAll2: 'Alle Phasen',
+        exportPeriodsFootnote: 'Bewerbungen ohne Phase werden immer exportiert.',
+        importFileDetected: 'Datei erkannt',
+        importFileContent: (apps: number, periods: number, companies: number) => {
+            const parts = [`${apps} Bewerbung${apps > 1 ? 'en' : ''}`]
+            if (periods > 0) parts.push(`${periods} Phase${periods > 1 ? 'n' : ''}`)
+            if (companies > 0) parts.push(`${companies} Unternehmen`)
+            return parts.join(', ') + ' in dieser Datei. Wie möchten Sie vorgehen?'
+        },
+        importMergeTitle: 'Zusammenführen',
+        importMergeDesc: 'Fügt neue Einträge hinzu, ohne vorhandene Daten zu ändern.',
+        importReplaceTitle: 'Alles ersetzen',
+        importReplaceDesc: 'Löscht alle vorhandenen Daten und ersetzt sie durch die Datei.',
+        importCancel: 'Abbrechen',
     },
     periods: {
         settingsSection: 'Bewerbungsphasen',
