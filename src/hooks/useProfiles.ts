@@ -1,5 +1,5 @@
 // src/hooks/useProfiles.ts
-import { useState, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -11,27 +11,26 @@ export interface ProfileExperience {
     startDate: string       // YYYY-MM
     endDate?: string        // YYYY-MM, undefined = en cours
     description: string
-    companyId?: string      // optional link to JAT company profile
+    companyId?: string
 }
 
 export interface CandidateProfile {
     id: string
-    name: string            // display name for the selector
+    name: string
     firstName: string
     lastName: string
     email?: string
     phone?: string
-    skills: string          // free text : "React, TypeScript, gestion de projet…"
-    degrees: string         // free text : "Master Finance, Polytechnique 2023"
+    skills: string
+    degrees: string
     experiences: ProfileExperience[]
     createdAt: string
     updatedAt: string
 }
 
-// ── Storage key ───────────────────────────────────────────────────────────────
+// ── Storage ───────────────────────────────────────────────────────────────────
 const STORAGE_KEY = 'jat_candidate_profiles'
 
-// ── Repository helpers (pure functions, no class overhead) ────────────────────
 function readAll(): CandidateProfile[] {
     try {
         const raw = localStorage.getItem(STORAGE_KEY)
@@ -46,11 +45,26 @@ function writeAll(profiles: CandidateProfile[]): void {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(profiles))
 }
 
+// ── Shared module-level state (same pattern as useToast) ──────────────────────
+let _profiles: CandidateProfile[] = readAll()
+let _listeners: Array<(profiles: CandidateProfile[]) => void> = []
+
+function emit(next: CandidateProfile[]) {
+    _profiles = next
+    _listeners.forEach(l => l([..._profiles]))
+}
+
 // ── Hook ──────────────────────────────────────────────────────────────────────
 export function useProfiles() {
-    const [profiles, setProfilesState] = useState<CandidateProfile[]>(() => readAll())
+    const [profiles, setProfilesState] = useState<CandidateProfile[]>(_profiles)
 
-    const refresh = useCallback(() => setProfilesState(readAll()), [])
+    useEffect(() => {
+        const handler = (next: CandidateProfile[]) => setProfilesState(next)
+        _listeners.push(handler)
+        return () => {
+            _listeners = _listeners.filter(l => l !== handler)
+        }
+    }, [])
 
     const saveProfile = useCallback(
         (data: Omit<CandidateProfile, 'id' | 'createdAt' | 'updatedAt'>): CandidateProfile => {
@@ -61,9 +75,9 @@ export function useProfiles() {
                 createdAt: now,
                 updatedAt: now,
             }
-            const all = readAll()
-            writeAll([...all, created])
-            setProfilesState([...all, created])
+            const next = [..._profiles, created]
+            writeAll(next)
+            emit(next)
             return created
         },
         []
@@ -71,27 +85,22 @@ export function useProfiles() {
 
     const updateProfile = useCallback(
         (id: string, updates: Partial<Omit<CandidateProfile, 'id' | 'createdAt'>>): void => {
-            const all = readAll()
-            const idx = all.findIndex(p => p.id === id)
-            if (idx === -1) return
-            const updated: CandidateProfile = {
-                ...all[idx],
-                ...updates,
-                id,
-                updatedAt: new Date().toISOString(),
-            }
-            all[idx] = updated
-            writeAll(all)
-            setProfilesState([...all])
+            const next = _profiles.map(p =>
+                p.id === id
+                    ? { ...p, ...updates, id, updatedAt: new Date().toISOString() }
+                    : p
+            )
+            writeAll(next)
+            emit(next)
         },
         []
     )
 
     const deleteProfile = useCallback((id: string): void => {
-        const next = readAll().filter(p => p.id !== id)
+        const next = _profiles.filter(p => p.id !== id)
         writeAll(next)
-        setProfilesState(next)
+        emit(next)
     }, [])
 
-    return { profiles, saveProfile, updateProfile, deleteProfile, refresh }
-}
+    return { profiles, saveProfile, updateProfile, deleteProfile }
+}   
