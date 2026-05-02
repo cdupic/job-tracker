@@ -1,6 +1,6 @@
 // src/pages/FollowUpPage.tsx
 import { useState } from 'react'
-import { useJobs } from '@/hooks/useJobs'
+import { useJobs, useUpdateJob } from '@/hooks/useJobs'
 import { useKanbanConfig } from '@/hooks/useKanbanConfig'
 import { useCompanies } from '@/hooks/useCompanies'
 import { useProfiles, type CandidateProfile } from '@/hooks/useProfiles'
@@ -8,7 +8,7 @@ import { useI18n } from '@/i18n'
 import { cn, formatDate } from '@/lib/utils'
 import {
     Mail, ChevronRight, Loader2, Copy, Check, Pencil, X,
-    Building2, Calendar, Tag, FileText, Globe, User, UserCircle2,
+    Building2, Calendar, Tag, FileText, Globe, User, Save, BookmarkCheck,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,9 +16,9 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { COLUMN_COLOR_STYLES, FALLBACK_COLOR_STYLE, type JobApplication } from '@/types'
+import { COLUMN_COLOR_STYLES, FALLBACK_COLOR_STYLE, type JobApplication, type FollowUpEmail } from '@/types'
+import { toast } from '@/hooks/useToast'
 
-// ── OpenRouter config (clé + modèle viennent du hook, jamais hardcodés) ───────
 import { useOpenRouter, OPENROUTER_URL } from '@/hooks/useOpenRouter'
 
 // ── Mail language options ─────────────────────────────────────────────────────
@@ -63,8 +63,8 @@ interface PromptCandidateData {
     phone?: string
     skills?: string
     degrees?: string
-    experiences?: string    // pre-formatted block
-    notes?: string          // job notes
+    experiences?: string
+    notes?: string
 }
 
 interface PromptContactData {
@@ -94,18 +94,15 @@ function buildPrompt(params: {
 
     const subjectLabel = language === 'anglais' ? 'Subject' : 'Objet'
 
-    // Notes block
     const hasNotes = candidate.notes && candidate.notes.trim() !== '' && candidate.notes.trim().toLowerCase() !== 'n/a'
     const notesLine = hasNotes ? candidate.notes!.trim() : 'aucune'
 
-    // Profile block
     const profileLines: string[] = []
     if (candidate.skills) profileLines.push(`Compétences : ${candidate.skills}`)
     if (candidate.degrees) profileLines.push(`Diplômes : ${candidate.degrees}`)
     if (candidate.experiences) profileLines.push(`Expériences :\n${candidate.experiences}`)
     const profileBlock = profileLines.length > 0 ? profileLines.join('\n') : 'non renseigné'
 
-    // Contact block
     const contactBlock = contact && contact.name
         ? [
             `Nom : ${contact.name}`,
@@ -311,6 +308,7 @@ function JobInfoPanel({ job, statusLabel, onStatusChange, onNotesChange, columns
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export function FollowUpPage() {
     const { data: jobs = [] } = useJobs()
+    const updateJob = useUpdateJob()
     const { columns } = useKanbanConfig()
     const { data: companies = [] } = useCompanies()
     const { profiles } = useProfiles()
@@ -324,18 +322,16 @@ export function FollowUpPage() {
     // Step 2 - profile mode
     const [candidateMode, setCandidateMode] = useState<'manual' | 'profile'>('manual')
     const [selectedProfileId, setSelectedProfileId] = useState<string>('')
-    // manual fields
     const [firstName, setFirstName] = useState('')
     const [lastName, setLastName] = useState('')
     const [signature, setSignature] = useState('')
     const [mailLanguage, setMailLanguage] = useState<MailLanguage>('français')
     const [firstNameErr, setFirstNameErr] = useState(false)
     const [lastNameErr, setLastNameErr] = useState(false)
-    // job overrides
     const [overrideStatus, setOverrideStatus] = useState<string | null>(null)
     const [overrideNotes, setOverrideNotes] = useState<string | null>(null)
 
-    // Step 3 - prompt fields
+    // Step 3
     const [prompt, setPrompt] = useState('')
     const [editingPromptMode, setEditingPromptMode] = useState<'fields' | 'raw'>('fields')
     const [pf_firstName, setPfFirstName] = useState('')
@@ -360,6 +356,7 @@ export function FollowUpPage() {
     const [generatedBody, setGeneratedBody] = useState('')
     const [error, setError] = useState('')
     const [copied, setCopied] = useState(false)
+    const [saved, setSaved] = useState(false)
 
     // Derived
     const selectedJob = jobs.find(j => j.id === selectedJobId)
@@ -368,11 +365,10 @@ export function FollowUpPage() {
     const col = columns.find(c => c.id === effectiveStatus)
     const effectiveStatusLabel = col?.label ?? effectiveStatus
 
-    // Company profile + contact for selected job
     const jobCompany = selectedJob?.companyId
         ? companies.find(c => c.id === selectedJob.companyId)
         : companies.find(c => c.name === selectedJob?.company?.toLowerCase().trim())
-    const jobContact = jobCompany?.contacts?.[0] ?? null   // first contact as default
+    const jobContact = jobCompany?.contacts?.[0] ?? null
 
     const selectedProfile = profiles.find(p => p.id === selectedProfileId) ?? null
 
@@ -401,15 +397,6 @@ export function FollowUpPage() {
         }
     }
 
-    function buildContactData(): PromptContactData | null {
-        // pf_ fields take priority in step 3
-        if (pf_contact_name) return { name: pf_contact_name, role: pf_contact_role || undefined, email: pf_contact_email || undefined }
-        if (jobContact) return { name: jobContact.name, role: jobContact.role, email: jobContact.email }
-        // also check job.contact
-        if (selectedJob?.contact?.name) return { name: selectedJob.contact.name, email: selectedJob.contact.email }
-        return null
-    }
-
     // ── Navigation ────────────────────────────────────────────────────────────
     function goToStep2() {
         if (!selectedJobId) return
@@ -419,7 +406,6 @@ export function FollowUpPage() {
     }
 
     function goToStep3() {
-        // Validate
         if (candidateMode === 'manual') {
             if (!firstName.trim()) { setFirstNameErr(true); return }
             if (!lastName.trim()) { setLastNameErr(true); return }
@@ -487,6 +473,7 @@ export function FollowUpPage() {
         setError('')
         setGeneratedSubject('')
         setGeneratedBody('')
+        setSaved(false)
 
         const candidate: PromptCandidateData = {
             firstName: pf_firstName, lastName: pf_lastName,
@@ -509,8 +496,6 @@ export function FollowUpPage() {
 
         try {
             const apiKey = await getApiKey()
-            console.log(apiKey)
-            console.log(selectedModel)
             if (!apiKey) throw new Error('Clé API OpenRouter non configurée. Va dans Paramètres → OpenRouter pour la renseigner.')
 
             const res = await fetch(OPENROUTER_URL, {
@@ -524,27 +509,21 @@ export function FollowUpPage() {
                 body: JSON.stringify({ model: selectedModel, messages: [{ role: 'user', content: finalPrompt }] }),
             })
 
-            console.log(res)
             if (!res.ok) throw new Error(`HTTP ${res.status}`)
             const data = await res.json()
             const text: string = data?.choices?.[0]?.message?.content ?? ''
 
-            // Extract subject line
             const subjMatch = text.match(/(?:Objet|Subject)\s*:\s*(.+?)(?:\n|$)/i)
             const subject = subjMatch ? subjMatch[1].trim() : `Suivi – ${pf_role}`
 
-            // Remove EVERYTHING before (and including) the --- separator that follows the subject
-            // Strategy: find the --- line after the subject, take what's after
             let body = text
             const separatorIdx = text.indexOf('---')
             if (separatorIdx !== -1) {
                 body = text.slice(separatorIdx + 3).trim()
             } else {
-                // fallback: strip the "Objet/Subject : ..." line
                 body = text.replace(/(?:Objet|Subject)\s*:.+?(\n|$)/i, '').trim()
             }
 
-            // Strip trailing closing formulas
             body = body
                 .split(/\n(?:Cordialement|Bien à vous|Sincèrement|Best regards|Kind regards|Yours sincerely|Mit freundlichen Grüßen|Atentamente|Cordiali saluti|Met vriendelijke groet)/i)[0]
                 .trim()
@@ -569,16 +548,42 @@ export function FollowUpPage() {
         setTimeout(() => setCopied(false), 2000)
     }
 
+    async function saveEmailToJob() {
+        if (!selectedJob || !generatedSubject || !generatedBody) return
+
+        const newEmail: FollowUpEmail = {
+            id: crypto.randomUUID(),
+            subject: generatedSubject,
+            body: generatedBody,
+            language: pf_language,
+            generatedAt: new Date().toISOString(),
+        }
+
+        const existing = selectedJob.followUpEmails ?? []
+        await updateJob.mutateAsync({
+            id: selectedJob.id,
+            updates: {
+                followUpEmails: [...existing, newEmail],
+                followed: false,
+            }
+        })
+        setSaved(true)
+        toast({
+            title: 'Email sauvegardé',
+            description: `Ajouté à la candidature ${selectedJob.company} · ${selectedJob.role}`,
+        })
+    }
+
     function reset() {
         setStep(1); setSelectedJobId(null)
         setFirstName(''); setLastName(''); setSignature(''); setMailLanguage('français')
         setGeneratedSubject(''); setGeneratedBody(''); setError('')
         setCandidateMode('manual'); setSelectedProfileId('')
+        setSaved(false)
     }
 
     const steps = ['Candidature', 'Candidat', 'Prompt', 'Email']
 
-    // ── Effective signature for display ───────────────────────────────────────
     const effectiveSignature = (() => {
         if (signature) return signature
         if (candidateMode === 'profile' && selectedProfile) {
@@ -643,10 +648,10 @@ export function FollowUpPage() {
                                 const c = columns.find(c => c.id === job.status)
                                 const colors = c ? COLUMN_COLOR_STYLES[c.color as keyof typeof COLUMN_COLOR_STYLES] ?? FALLBACK_COLOR_STYLE : FALLBACK_COLOR_STYLE
                                 const isSelected = selectedJobId === job.id
-                                // Check if has linked company with contacts
                                 const hasContact = !!job.contact?.name || !!companies.find(co =>
                                     co.id === job.companyId || co.name === job.company?.toLowerCase().trim()
                                 )?.contacts?.length
+                                const emailCount = job.followUpEmails?.length ?? 0
                                 return (
                                     <button
                                         key={job.id}
@@ -668,6 +673,16 @@ export function FollowUpPage() {
                                                         <User className="h-2.5 w-2.5" /> contact
                                                     </span>
                                                 )}
+                                                {job.followed && (
+                                                    <span className="text-[10px] text-orange-500 flex items-center gap-0.5">
+                                                        <Check className="h-2.5 w-2.5" /> relancé
+                                                    </span>
+                                                )}
+                                                {emailCount > 0 && (
+                                                    <span className="text-[10px] text-muted-foreground/50 font-mono">
+                                                        {emailCount}✉ sauvegardé{emailCount > 1 ? 's' : ''}
+                                                    </span>
+                                                )}
                                             </div>
                                         </div>
                                         <Badge className={cn(colors.badge, 'text-[10px] shrink-0')}>{c?.label ?? job.status}</Badge>
@@ -686,7 +701,6 @@ export function FollowUpPage() {
             {/* ── Step 2: Candidate info ── */}
             {step === 2 && selectedJob && (
                 <div className="flex flex-col gap-4 animate-slide-up">
-                    {/* Job info panel */}
                     <JobInfoPanel
                         job={{ ...selectedJob, notes: effectiveNotes, status: effectiveStatus }}
                         statusLabel={effectiveStatusLabel}
@@ -695,7 +709,6 @@ export function FollowUpPage() {
                         columns={columns}
                     />
 
-                    {/* Contact info (read-only preview if exists) */}
                     {(jobContact || selectedJob.contact?.name) && (
                         <div className="rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 p-4 flex items-start gap-3">
                             <User className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
@@ -711,11 +724,9 @@ export function FollowUpPage() {
                         </div>
                     )}
 
-                    {/* Candidate section */}
                     <div className="rounded-xl border border-border bg-card p-5 flex flex-col gap-4">
                         <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Vos informations</h3>
 
-                        {/* Mode toggle */}
                         {profiles.length > 0 && (
                             <div className="flex gap-1 p-1 rounded-lg bg-muted w-fit">
                                 {([
@@ -739,7 +750,6 @@ export function FollowUpPage() {
                             </div>
                         )}
 
-                        {/* Profile selector */}
                         {candidateMode === 'profile' && (
                             <div className="flex flex-col gap-2">
                                 <Label>Sélectionner un profil</Label>
@@ -785,7 +795,6 @@ export function FollowUpPage() {
                             </div>
                         )}
 
-                        {/* Manual fields */}
                         {candidateMode === 'manual' && (
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="flex flex-col gap-1.5">
@@ -849,7 +858,6 @@ export function FollowUpPage() {
 
                         {editingPromptMode === 'fields' ? (
                             <div className="flex flex-col gap-3">
-                                {/* Candidate */}
                                 <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">Candidat</p>
                                 <div className="grid grid-cols-2 gap-3">
                                     <div className="flex flex-col gap-1.5"><Label>Prénom</Label><Input value={pf_firstName} onChange={e => setPfFirstName(e.target.value)} /></div>
@@ -868,7 +876,6 @@ export function FollowUpPage() {
                                     <Textarea value={pf_experiences} onChange={e => setPfExperiences(e.target.value)} rows={3} placeholder="Expériences pro / perso…" />
                                 </div>
 
-                                {/* Job */}
                                 <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest pt-1 border-t border-border">Candidature</p>
                                 <div className="grid grid-cols-2 gap-3">
                                     <div className="flex flex-col gap-1.5"><Label>Entreprise</Label><Input value={pf_company} onChange={e => setPfCompany(e.target.value)} /></div>
@@ -879,7 +886,6 @@ export function FollowUpPage() {
                                     <Textarea value={pf_notes} onChange={e => setPfNotes(e.target.value)} rows={2} />
                                 </div>
 
-                                {/* Contact */}
                                 <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest pt-1 border-t border-border">Contact entreprise</p>
                                 <div className="grid grid-cols-3 gap-2">
                                     <div className="flex flex-col gap-1.5"><Label>Nom</Label><Input value={pf_contact_name} onChange={e => setPfContactName(e.target.value)} placeholder="Marie Dupont" /></div>
@@ -887,7 +893,6 @@ export function FollowUpPage() {
                                     <div className="flex flex-col gap-1.5"><Label>Email</Label><Input value={pf_contact_email} onChange={e => setPfContactEmail(e.target.value)} placeholder="m@co.com" /></div>
                                 </div>
 
-                                {/* Context */}
                                 <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest pt-1 border-t border-border">Contexte</p>
                                 <div className="flex flex-col gap-1.5"><Label>Statut</Label><Input value={pf_status} onChange={e => setPfStatus(e.target.value)} /></div>
                                 <div className="flex flex-col gap-1.5"><Label>Ton</Label><Input value={pf_tone} onChange={e => setPfTone(e.target.value)} /></div>
@@ -952,6 +957,33 @@ export function FollowUpPage() {
                                         <div className="rounded-md border border-border bg-muted/30 px-3 py-2 text-muted-foreground whitespace-pre-wrap font-mono text-xs">
                                             {effectiveSignature}
                                         </div>
+                                    </div>
+                                )}
+
+                                {/* Save to job button */}
+                                {selectedJob && (
+                                    <div className="pt-3 border-t border-border">
+                                        {saved ? (
+                                            <div className="flex items-center gap-2 text-sm text-emerald-600 dark:text-emerald-400">
+                                                <BookmarkCheck className="h-4 w-4" />
+                                                <span className="font-medium">Sauvegardé dans la candidature</span>
+                                                <span className="text-xs text-muted-foreground">· La candidature est maintenant marquée « relancé »</span>
+                                            </div>
+                                        ) : (
+                                            <button
+                                                type="button"
+                                                onClick={saveEmailToJob}
+                                                className="flex items-center gap-2 w-full px-4 py-3 rounded-lg border border-dashed border-border hover:border-foreground/30 hover:bg-accent/30 transition-all text-left group"
+                                            >
+                                                <Save className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors shrink-0" />
+                                                <div className="flex flex-col gap-0">
+                                                    <span className="text-sm font-medium text-foreground">Sauvegarder dans la candidature</span>
+                                                    <span className="text-xs text-muted-foreground">
+                                                        Ajoute cet email à {selectedJob.company} · {selectedJob.role} 
+                                                    </span>
+                                                </div>
+                                            </button>
+                                        )}
                                     </div>
                                 )}
                             </div>

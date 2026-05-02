@@ -1,5 +1,5 @@
 // src/components/forms/JobForm.tsx
-import { useState, useRef } from 'react'
+import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -13,9 +13,9 @@ import { useCreateJob, useUpdateJob, useDeleteJob } from '@/hooks/useJobs'
 import { useCompanies, useCreateCompany } from '@/hooks/useCompanies'
 import { usePeriods } from '@/hooks/usePeriods'
 import { toast } from '@/hooks/useToast'
-import { todayISO } from '@/lib/utils'
-import { type JobApplication, type JobStatus, PERIOD_COLOR_STYLES } from '@/types'
-import { Trash2, Loader2, CalendarIcon, Building2, Check } from 'lucide-react'
+import { todayISO, formatDate } from '@/lib/utils'
+import { type JobApplication, type JobStatus, PERIOD_COLOR_STYLES, type FollowUpEmail } from '@/types'
+import { Trash2, Loader2, CalendarIcon, Building2, Check, Mail, ChevronDown, ChevronUp, Copy } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useI18n } from '@/i18n'
 import { useKanbanConfig } from '@/hooks/useKanbanConfig'
@@ -50,9 +50,12 @@ export function JobForm({ job, onClose }: JobFormProps) {
   const [contactName, setContactName] = useState(job?.contact?.name ?? '')
   const [contactEmail, setContactEmail] = useState(job?.contact?.email ?? '')
   const [notes, setNotes] = useState(job?.notes ?? '')
+  const [followed, setFollowed] = useState<boolean>(job?.followed ?? false)
   const [errors, setErrors] = useState<FormErrors>({})
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [companySheetOpen, setCompanySheetOpen] = useState(false)
+  const [expandedEmailId, setExpandedEmailId] = useState<string | null>(null)
+  const [copiedEmailId, setCopiedEmailId] = useState<string | null>(null)
 
   const createJob = useCreateJob()
   const updateJob = useUpdateJob()
@@ -60,6 +63,8 @@ export function JobForm({ job, onClose }: JobFormProps) {
 
   const parsedDate = dateApplied ? new Date(dateApplied + 'T12:00:00') : undefined
   const isPending = createJob.isPending || updateJob.isPending || createCompany.isPending
+
+  const savedEmails: FollowUpEmail[] = job?.followUpEmails ?? []
 
   // Suggestions: companies whose name contains the typed string (case-insensitive),
   // excluding an exact match (already selected)
@@ -76,7 +81,7 @@ export function JobForm({ job, onClose }: JobFormProps) {
 
   function handleCompanyChange(value: string) {
     setCompany(value)
-    setCompanyId(undefined) // user typed manually → reset link
+    setCompanyId(undefined)
     setShowSuggestions(true)
   }
 
@@ -96,15 +101,10 @@ export function JobForm({ job, onClose }: JobFormProps) {
   }
 
   async function resolveCompanyId(): Promise<string> {
-    // 1. Already linked via autocomplete selection
     if (companyId) return companyId
-
-    // 2. Exact name match in existing companies
     const normalized = company.trim().toLowerCase()
     const existing = companies.find((c) => c.name === normalized)
     if (existing) return existing.id
-
-    // 3. Auto-create a minimal profile
     const created = await createCompany.mutateAsync({
       name: normalized,
       displayName: company.trim(),
@@ -127,6 +127,8 @@ export function JobForm({ job, onClose }: JobFormProps) {
       dateApplied,
       periodId: periodId || undefined,
       companyId: resolvedCompanyId,
+      followed,
+      followUpEmails: job?.followUpEmails,
       contact:
           contactName || contactEmail
               ? { name: contactName || undefined, email: contactEmail || undefined }
@@ -149,6 +151,20 @@ export function JobForm({ job, onClose }: JobFormProps) {
     await deleteJob.mutateAsync(job.id)
     toast({ title: t.toast.deleted, variant: 'destructive' })
     onClose()
+  }
+
+  async function handleDeleteEmail(emailId: string) {
+    if (!job) return
+    const updated = (job.followUpEmails ?? []).filter(e => e.id !== emailId)
+    await updateJob.mutateAsync({ id: job.id, updates: { followUpEmails: updated } })
+    toast({ title: 'Email supprimé', variant: 'destructive' })
+  }
+
+  function copyEmail(email: FollowUpEmail) {
+    const subjectLabel = email.language === 'anglais' ? 'Subject' : 'Objet'
+    navigator.clipboard.writeText(`${subjectLabel} : ${email.subject}\n\n${email.body}`)
+    setCopiedEmailId(email.id)
+    setTimeout(() => setCopiedEmailId(null), 2000)
   }
 
   return (
@@ -370,6 +386,107 @@ export function JobForm({ job, onClose }: JobFormProps) {
                 rows={3}
             />
           </div>
+
+          {/* Followed toggle */}
+          <div className="flex items-center justify-between p-3.5 rounded-lg border border-border bg-muted/30">
+            <div className="flex items-center gap-3">
+              <div className={cn(
+                  'h-8 w-8 rounded-full flex items-center justify-center shrink-0 transition-colors',
+                  followed ? 'bg-orange-100 dark:bg-orange-950' : 'bg-muted'
+              )}>
+                <Mail className={cn('h-4 w-4', followed ? 'text-orange-500' : 'text-muted-foreground')} />
+              </div>
+              <div className="flex flex-col gap-0">
+                <span className="text-sm font-medium text-foreground">Relancé</span>
+                <span className="text-xs text-muted-foreground">
+                  {followed ? 'Une relance a été effectuée' : 'Aucune relance effectuée'}
+                </span>
+              </div>
+            </div>
+            <button
+                type="button"
+                onClick={() => setFollowed(f => !f)}
+                className={cn(
+                    'relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none',
+                    followed ? 'bg-orange-500' : 'bg-input'
+                )}
+                role="switch"
+                aria-checked={followed}
+            >
+              <span className={cn(
+                  'pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-lg transform transition duration-200',
+                  followed ? 'translate-x-4' : 'translate-x-0'
+              )} />
+            </button>
+          </div>
+
+          {/* Saved follow-up emails */}
+          {isEdit && savedEmails.length > 0 && (
+              <div className="flex flex-col gap-2">
+                <Label>
+                <span className="flex items-center gap-1.5">
+                  <Mail className="h-3.5 w-3.5" />
+                  Emails de relance sauvegardés
+                  <span className="font-mono text-muted-foreground/60">({savedEmails.length})</span>
+                </span>
+                </Label>
+                <div className="flex flex-col gap-2">
+                  {savedEmails.map((email) => (
+                      <div key={email.id} className="rounded-lg border border-border bg-card overflow-hidden">
+                        <button
+                            type="button"
+                            onClick={() => setExpandedEmailId(expandedEmailId === email.id ? null : email.id)}
+                            className="flex items-center justify-between w-full px-3 py-2.5 text-left hover:bg-accent/40 transition-colors"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Mail className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                            <span className="text-xs font-medium text-foreground truncate">{email.subject}</span>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-[10px] font-mono text-muted-foreground/60">
+                          {formatDate(email.generatedAt.split('T')[0], t.intlLocale)}
+                        </span>
+                            {expandedEmailId === email.id
+                                ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
+                                : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                            }
+                          </div>
+                        </button>
+
+                        {expandedEmailId === email.id && (
+                            <div className="px-3 pb-3 pt-1 flex flex-col gap-3 border-t border-border bg-muted/20">
+                              <p className="text-xs text-foreground whitespace-pre-wrap leading-relaxed">{email.body}</p>
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-[10px] font-mono text-muted-foreground/50">{email.language}</span>
+                                <div className="flex gap-1.5">
+                                  <button
+                                      type="button"
+                                      onClick={() => copyEmail(email)}
+                                      className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded hover:bg-accent"
+                                  >
+                                    {copiedEmailId === email.id
+                                        ? <Check className="h-3 w-3 text-emerald-500" />
+                                        : <Copy className="h-3 w-3" />
+                                    }
+                                    {copiedEmailId === email.id ? 'Copié' : 'Copier'}
+                                  </button>
+                                  <button
+                                      type="button"
+                                      onClick={() => handleDeleteEmail(email.id)}
+                                      className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-destructive transition-colors px-2 py-1 rounded hover:bg-destructive/10"
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                    Supprimer
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                        )}
+                      </div>
+                  ))}
+                </div>
+              </div>
+          )}
 
           {/* Actions */}
           <div className="flex items-center justify-between pt-1 border-t border-border">
