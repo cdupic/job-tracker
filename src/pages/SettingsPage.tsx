@@ -9,6 +9,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { PeriodForm } from '@/components/periods/PeriodForm'
+import { ProfilesSettingsSection } from '@/components/profiles/ProfilesSettingsSection'
+import { OpenRouterSettingsSection } from '@/components/openrouter/OpenRouterSettingsSection'
 import { type ExportData, type Period, PERIOD_COLOR_STYLES, type PeriodColor } from '@/types'
 import {
   Download, Upload, Check, Loader2, Plus, Pencil,
@@ -66,7 +68,6 @@ export function SettingsPage() {
   )
   const [showExportPeriods, setShowExportPeriods] = useState(false)
 
-  // Sync si les périodes chargent après le premier render
   const allPeriodIds = periods.map((p) => p.id)
   const allSelected = allPeriodIds.every((id) => exportPeriodIds.has(id))
 
@@ -96,13 +97,11 @@ export function SettingsPage() {
   function handleExport() {
     const date = new Date().toISOString().split('T')[0]
 
-    // Candidatures filtrées : sans période + celles des périodes cochées
     const filteredJobs = jobs.filter(
         (j) => !j.periodId || exportPeriodIds.has(j.periodId)
     )
     const filteredPeriods = periods.filter((p) => exportPeriodIds.has(p.id))
 
-    // Entreprises liées aux candidatures exportées
     const exportedCompanyIds = new Set(filteredJobs.map((j) => j.companyId).filter(Boolean))
     const filteredCompanies = companies.filter((c) => exportedCompanyIds.has(c.id))
 
@@ -165,7 +164,6 @@ export function SettingsPage() {
     setImportConfirm(null)
   }
 
-  // ── Helpers affichage ─────────────────────────────────────────────────────
   const previewJobCount = jobs.filter(
       (j) => !j.periodId || exportPeriodIds.has(j.periodId)
   ).length
@@ -177,7 +175,7 @@ export function SettingsPage() {
           <p className="text-sm text-muted-foreground mt-1">{t.settings.subtitle}</p>
         </div>
 
-        {/* Follow-up */}
+        {/* ── Follow-up ── */}
         <section className="bg-card border border-border rounded-xl p-6 mb-4">
           <h2 className="text-sm font-semibold mb-4">{t.settings.followUpSection}</h2>
           <div className="flex items-center gap-4">
@@ -199,7 +197,7 @@ export function SettingsPage() {
           </div>
         </section>
 
-        {/* Periods */}
+        {/* ── Periods ── */}
         <section className="bg-card border border-border rounded-xl p-6 mb-4">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-sm font-semibold">{t.periods.settingsSection}</h2>
@@ -266,13 +264,19 @@ export function SettingsPage() {
           )}
         </section>
 
-        {/* Export / Import */}
+        {/* ── Profils candidat ── */}
+        <ProfilesSettingsSection />
+
+        {/* ── OpenRouter ── */}
+        <OpenRouterSettingsSection />
+
+        {/* ── Export / Import ── */}
         <section className="bg-card border border-border rounded-xl p-6">
           <h2 className="text-sm font-semibold mb-4">{t.settings.dataSection}</h2>
 
           <div className="flex flex-col gap-4">
 
-            {/* ── Export ── */}
+            {/* Export */}
             <div className="flex flex-col gap-3">
               <div className="flex items-start justify-between gap-4">
                 <div>
@@ -285,7 +289,6 @@ export function SettingsPage() {
                 </Button>
               </div>
 
-              {/* Sélecteur de périodes pour l'export */}
               {periods.length > 0 && (
                   <div className="rounded-lg border border-border overflow-hidden">
                     <button
@@ -313,7 +316,6 @@ export function SettingsPage() {
 
                     {showExportPeriods && (
                         <div className="flex flex-col gap-2.5 px-3 py-3 border-t border-border bg-muted/30">
-                          {/* Tout sélectionner */}
                           <label className="flex items-center gap-2.5 cursor-pointer pb-2 border-b border-border/60">
                             <input
                                 type="checkbox"
@@ -344,7 +346,7 @@ export function SettingsPage() {
 
             <div className="border-t border-border" />
 
-            {/* ── Import ── */}
+            {/* Import */}
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-sm">{t.settings.importLabel}</p>
@@ -357,7 +359,6 @@ export function SettingsPage() {
               <input ref={fileRef} type="file" accept=".json" className="hidden" onChange={handleFileChange} />
             </div>
 
-            {/* Confirmation import avec choix de stratégie */}
             {importConfirm && (
                 <div className="p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg flex flex-col gap-4">
                   <div className="flex items-start gap-2">
@@ -376,9 +377,7 @@ export function SettingsPage() {
                     </div>
                   </div>
 
-                  {/* Les deux stratégies */}
                   <div className="grid grid-cols-2 gap-2">
-                    {/* Fusionner */}
                     <button
                         type="button"
                         onClick={() => confirmImport('merge')}
@@ -396,7 +395,6 @@ export function SettingsPage() {
                       </p>
                     </button>
 
-                    {/* Remplacer tout */}
                     <button
                         type="button"
                         onClick={() => confirmImport('replace')}

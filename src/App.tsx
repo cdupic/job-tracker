@@ -2,12 +2,13 @@
 import { useState } from 'react'
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { LayoutGrid, BarChart2, Settings, Moon, Sun, Languages, Building2 } from 'lucide-react'
+import { LayoutGrid, BarChart2, Settings, Moon, Sun, Languages, Building2, Mail } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { BoardPage } from '@/pages/BoardPage'
 import { StatsPage } from '@/pages/StatsPage'
 import { SettingsPage } from '@/pages/SettingsPage'
 import { CompaniesPage } from '@/pages/CompaniesPage'
+import { FollowUpPage } from '@/pages/FollowUpPage'
 import { Toaster } from '@/components/ui/Toaster'
 import { I18nProvider, useI18n, LOCALES, type AppLocale } from '@/i18n'
 import { KanbanConfigProvider } from '@/hooks/useKanbanConfig'
@@ -95,7 +96,9 @@ function AppShell() {
         { to: '/', icon: LayoutGrid, label: t.nav.board },
         { to: '/stats', icon: BarChart2, label: t.nav.stats },
         { to: '/companies', icon: Building2, label: t.nav.companies },
+        { to: '/followup', icon: Mail, label: t.nav.followUp },
         { to: '/settings', icon: Settings, label: t.nav.settings },
+
     ]
 
     return (
@@ -148,6 +151,7 @@ function AppShell() {
                         <Route path="/" element={<BoardPage />} />
                         <Route path="/stats" element={<StatsPage />} />
                         <Route path="/companies" element={<CompaniesPage />} />
+                        <Route path="/followup" element={<FollowUpPage />} />
                         <Route path="/settings" element={<SettingsPage />} />
                     </Routes>
                 </div>

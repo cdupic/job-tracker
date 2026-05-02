@@ -12,6 +12,7 @@ const fr = {
         settings: 'Paramètres',
         companies: 'Entreprises',
         subtitle: 'Job Application Tracker',
+        followUp: "Relance"
     },
     board: {
         title: 'Candidatures',
@@ -213,6 +214,8 @@ const en: Translations = {
         settings: 'Settings',
         companies: 'Companies',
         subtitle: 'Job Application Tracker',
+        followUp: "Follow Up"
+
     },
     board: {
         title: 'Applications',
@@ -412,6 +415,8 @@ const de: Translations = {
         settings: 'Einstellungen',
         companies: 'Unternehmen',
         subtitle: 'Job Application Tracker',
+        followUp: "Follow Up"
+
     },
     board: {
         title: 'Bewerbungen',
