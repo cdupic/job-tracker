@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { ExternalLink, AlertCircle, User } from 'lucide-react'
+import { ExternalLink, AlertCircle, User, Mail, Check } from 'lucide-react'
 import { cn, daysBetween, formatDate } from '@/lib/utils'
 import { type JobApplication, COLUMN_COLOR_STYLES, FALLBACK_COLOR_STYLE, PERIOD_COLOR_STYLES } from '@/types'
 import { Badge } from '@/components/ui/badge'
@@ -12,6 +12,7 @@ import { JobForm } from '@/components/forms/JobForm'
 import { useKanbanConfig } from '@/hooks/useKanbanConfig'
 import { usePeriods } from '@/hooks/usePeriods'
 import { useI18n } from '@/i18n'
+import { useUpdateJob } from '@/hooks/useJobs'
 
 interface JobCardProps {
   job: JobApplication
@@ -25,6 +26,7 @@ export function JobCard({ job, followUpDays }: JobCardProps) {
   const needsFollowUp = job.status === 'applied' && days >= followUpDays
   const { columns } = useKanbanConfig()
   const { data: periods = [] } = usePeriods()
+  const updateJob = useUpdateJob()
 
   const col = columns.find((c) => c.id === job.status)
   const colors = col ? COLUMN_COLOR_STYLES[col.color] : FALLBACK_COLOR_STYLE
@@ -39,6 +41,13 @@ export function JobCard({ job, followUpDays }: JobCardProps) {
     transform: CSS.Transform.toString(transform),
     transition,
   }
+
+  async function toggleFollowed(e: React.MouseEvent) {
+    e.stopPropagation()
+    await updateJob.mutateAsync({ id: job.id, updates: { followed: !job.followed } })
+  }
+
+  const savedEmailsCount = job.followUpEmails?.length ?? 0
 
   return (
       <>
@@ -56,7 +65,7 @@ export function JobCard({ job, followUpDays }: JobCardProps) {
             )}
         >
           {/* Follow-up warning */}
-          {needsFollowUp && (
+          {needsFollowUp && !job.followed && (
               <div className="absolute top-3 right-3 flex items-center gap-1">
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75" />
@@ -81,7 +90,11 @@ export function JobCard({ job, followUpDays }: JobCardProps) {
           )}
 
           {/* Company */}
-          <p className="font-semibold text-[13px] text-foreground leading-tight pr-16 truncate">
+          <p className={cn(
+              'font-semibold text-[13px] leading-tight truncate',
+              needsFollowUp && !job.followed ? 'pr-16' : 'pr-4',
+              'text-foreground'
+          )}>
             {job.company}
           </p>
 
@@ -95,6 +108,30 @@ export function JobCard({ job, followUpDays }: JobCardProps) {
           </span>
 
             <div className="flex items-center gap-1.5">
+              {/* Followed toggle */}
+              <button
+                  onClick={toggleFollowed}
+                  title={job.followed ? 'Relancé — cliquer pour annuler' : 'Marquer comme relancé'}
+                  className={cn(
+                      'flex items-center justify-center h-5 w-5 rounded-md transition-colors',
+                      job.followed
+                          ? 'bg-orange-100 dark:bg-orange-950 text-orange-500 hover:bg-orange-200 dark:hover:bg-orange-900'
+                          : 'text-muted-foreground/40 hover:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-950/40'
+                  )}
+              >
+                {job.followed
+                    ? <Check className="h-3 w-3" />
+                    : <Mail className="h-3 w-3" />
+                }
+              </button>
+
+              {/* Saved emails badge */}
+              {savedEmailsCount > 0 && (
+                  <span className="text-[9px] font-mono text-muted-foreground/50 leading-none">
+                  {savedEmailsCount}✉
+                </span>
+              )}
+
               {job.contact && (job.contact.name || job.contact.email) && (
                   <Popover>
                     <PopoverTrigger asChild>
@@ -162,10 +199,15 @@ export function JobCard({ job, followUpDays }: JobCardProps) {
                 <p className="text-[10px] text-muted-foreground/60 line-clamp-1">{job.notes}</p>
               </div>
           )}
+
+          {/* Followed indicator bar */}
+          {job.followed && (
+              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-orange-400/60 rounded-b-lg" />
+          )}
         </div>
 
         <Dialog open={open} onOpenChange={setOpen}>
-          <DialogContent className="max-w-xl">
+          <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>
                 {job.company}{' '}
