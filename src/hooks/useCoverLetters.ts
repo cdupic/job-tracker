@@ -27,8 +27,18 @@ export function useCoverLetters() {
         const handler = (next: CoverLetter[]) => setLetters(next)
         _listeners.push(handler)
         loadOnce()
+
+        // React to bulk imports (useFullImport dispatches a StorageEvent)
+        async function onStorage(e: StorageEvent) {
+            if (e.key !== 'jat_cover_letters') return
+            _loaded = false
+            await loadOnce()
+        }
+        window.addEventListener('storage', onStorage)
+
         return () => {
             _listeners = _listeners.filter(l => l !== handler)
+            window.removeEventListener('storage', onStorage)
         }
     }, [])
 

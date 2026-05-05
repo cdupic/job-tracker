@@ -105,7 +105,7 @@ Intent: ${intent}
 Language: ${language}
 
 - Write 4 paragraphs maximum.
-- Be specific: reference actual skills from the profile that match the job requirements.
+- Be specific: reference actual skills from the profile ONLY if they are relevant to the job posting content : ${jobContent || 'Not provided'}.
 - Do NOT invent skills or experiences not mentioned in the profile.
 - Do NOT include: date, postal address, "Dear Sir/Madam" openers.
 - Address the letter to the company by name if possible.
@@ -408,6 +408,9 @@ export function CoverLettersPage() {
 
     // Step 2 — profile + language
     const [selectedProfileId, setSelectedProfileId] = useState('')
+    const [candidateMode, setCandidateMode] = useState<'manual' | 'profile'>('manual')
+    const [manualFirstName, setManualFirstName] = useState('')
+    const [manualLastName, setManualLastName] = useState('')
     const [language, setLanguage] = useState<MailLanguage>('français')
     const [tone, setTone] = useState('professionnel, enthousiaste, précis')
     const [intent, setIntent] = useState("Démontrer l'adéquation avec le poste en s'appuyant sur les compétences et expériences du profil.")
@@ -438,8 +441,12 @@ export function CoverLettersPage() {
     const [saved, setSaved] = useState(false)
     const [copied, setCopied] = useState(false)
 
-    const abortRef = useRef<AbortController | null>(null)
-    useEffect(() => () => { abortRef.current?.abort() }, [])
+    // Each generate() call gets a unique ID. If ID has changed when response arrives,
+    // the wizard was closed/reset → discard the result silently (request completes
+    // in the background but nothing is written to state).
+    const generationIdRef = useRef(0)
+    // Stores the ID of the last saved letter so "Annuler" can delete it.
+    const savedLetterIdRef = useRef<string | null>(null)
 
     // ── Derived ───────────────────────────────────────────────────────────────
     const selectedJob = jobs.find(j => j.id === selectedJobId)
@@ -473,11 +480,13 @@ export function CoverLettersPage() {
         setStep(1)
         setSelectedJobId(null)
         setJobCompany(''); setJobRole(''); setJobTitle(''); setJobContent(''); setJobPeriodId('')
-        setSelectedProfileId(''); setLanguage('français')
+        setSelectedProfileId(''); setCandidateMode('manual')
+        setManualFirstName(''); setManualLastName(''); setLanguage('français')
         setTone('professionnel, enthousiaste, précis')
         setIntent("Démontrer l'adéquation avec le poste en s'appuyant sur les compétences et expériences du profil.")
         setPrompt(''); setEditingMode('fields')
         setGenerated(''); setGenError(''); setSaveTitle(''); setSaved(false)
+        savedLetterIdRef.current = null
     }
 
     function handleSelectJob(jobId: string) {
@@ -516,15 +525,17 @@ export function CoverLettersPage() {
     }
 
     function goToStep3() {
-        if (!selectedProfileId) return
-        const prof = selectedProfile!
+        const isManual = candidateMode === 'manual'
+        if (!isManual && !selectedProfileId) return
+        if (isManual && (!manualFirstName.trim() || !manualLastName.trim())) return
+        const prof = selectedProfile
 
         // Init prompt fields
-        setPfFirstName(prof.firstName)
-        setPfLastName(prof.lastName)
-        setPfSkills(prof.skills || '')
-        setPfDegrees(prof.degrees || '')
-        setPfExperiences(formatExperiencesForPrompt(prof))
+        setPfFirstName(isManual ? manualFirstName.trim() : (prof?.firstName ?? ''))
+        setPfLastName(isManual ? manualLastName.trim() : (prof?.lastName ?? ''))
+        setPfSkills(isManual ? '' : (prof?.skills || ''))
+        setPfDegrees(isManual ? '' : (prof?.degrees || ''))
+        setPfExperiences(isManual ? '' : (prof ? formatExperiencesForPrompt(prof) : ''))
         setPfCompany(jobCompany)
         setPfRole(jobRole)
         setPfJobTitle(jobTitle)
@@ -539,11 +550,11 @@ export function CoverLettersPage() {
             jobTitle,
             jobContent,
             profile: {
-                firstName: prof.firstName,
-                lastName: prof.lastName,
-                skills: prof.skills || undefined,
-                degrees: prof.degrees || undefined,
-                experiences: formatExperiencesForPrompt(prof) || undefined,
+                firstName: isManual ? manualFirstName.trim() : (prof?.firstName ?? ''),
+                lastName: isManual ? manualLastName.trim() : (prof?.lastName ?? ''),
+                skills: isManual ? undefined : (prof?.skills || undefined),
+                degrees: isManual ? undefined : (prof?.degrees || undefined),
+                experiences: isManual ? undefined : (prof ? formatExperiencesForPrompt(prof) || undefined : undefined),
             },
             language,
             tone,
@@ -565,17 +576,15 @@ export function CoverLettersPage() {
 
         const finalPrompt = editingMode === 'fields' ? buildCurrentPrompt() : prompt
 
-        abortRef.current?.abort()
-        const ctrl = new AbortController()
-        abortRef.current = ctrl
+        const myGenId = ++generationIdRef.current
 
         try {
             const apiKey = await getApiKey()
+            if (generationIdRef.current !== myGenId) return
             if (!apiKey) throw new Error('Clé API OpenRouter non configurée. Rendez-vous dans Paramètres → OpenRouter.')
 
             const res = await fetch(OPENROUTER_URL, {
                 method: 'POST',
-                signal: ctrl.signal,
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${apiKey}`,
@@ -591,18 +600,21 @@ export function CoverLettersPage() {
 
             if (!res.ok) throw new Error(`HTTP ${res.status}`)
             const data = await res.json()
+            // If the wizard was closed/reset while waiting, discard silently
+            if (generationIdRef.current !== myGenId) return
             const text: string = data?.choices?.[0]?.message?.content ?? ''
 
-            // Strip potential closing formulas
+            // Strip potential closing formulas and trailing dashes
             const cleaned = text
                 .split(/\n(?:Cordialement|Bien à vous|Sincèrement|Best regards|Kind regards|Yours sincerely|Mit freundlichen Grüßen|Atentamente|Cordiali saluti|Met vriendelijke groet)/i)[0]
+                .replace(/[-–—]{2,}\s*$/gm, '')
                 .trim()
 
             setGenerated(cleaned)
             // Auto-suggest save title
             setSaveTitle(`${jobCompany} — ${jobRole}`)
         } catch (err) {
-            if (err instanceof DOMException && err.name === 'AbortError') return
+            if (generationIdRef.current !== myGenId) return
             setGenError(err instanceof Error ? err.message : 'Erreur inconnue')
         } finally {
             setGenerating(false)
@@ -612,7 +624,7 @@ export function CoverLettersPage() {
     async function handleSave() {
         if (!saveTitle.trim() || !generated.trim()) return
         setSaving(true)
-        await saveLetter({
+        const created = await saveLetter({
             title: saveTitle.trim(),
             company: pf_company || jobCompany,
             companyId: selectedJob?.companyId,
@@ -625,6 +637,7 @@ export function CoverLettersPage() {
             language: pf_language,
             generatedContent: generated,
         })
+        savedLetterIdRef.current = created.id
         setSaved(true)
         setSaving(false)
     }
@@ -659,7 +672,7 @@ export function CoverLettersPage() {
                 {/* Header */}
                 <div className="flex items-center gap-3">
                     <button
-                        onClick={() => { abortRef.current?.abort(); resetWizard(); setMode('list') }}
+                        onClick={() => { generationIdRef.current++; resetWizard(); setMode('list') }}
                         className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
                     >
                         <ArrowLeft className="h-3.5 w-3.5" /> Toutes les lettres
@@ -814,54 +827,97 @@ export function CoverLettersPage() {
 
                         {/* Profile selector */}
                         <div className="rounded-xl border border-border bg-card p-5 flex flex-col gap-4">
-                            <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Profil candidat</h3>
+                            <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Vos informations</h3>
 
-                            {profiles.length === 0 ? (
-                                <p className="text-sm text-muted-foreground">
-                                    Aucun profil créé.{' '}
-                                    <a href="/settings" className="underline text-foreground">Créer un profil</a>{' '}
-                                    dans Paramètres.
-                                </p>
-                            ) : (
-                                <Select value={selectedProfileId} onValueChange={setSelectedProfileId}>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Choisir un profil…" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {profiles.map(p => (
-                                            <SelectItem key={p.id} value={p.id}>
-                                                <div className="flex flex-col">
-                                                    <span className="font-medium">{p.name}</span>
-                                                    <span className="text-xs text-muted-foreground">{p.firstName} {p.lastName}</span>
-                                                </div>
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                            {/* Mode toggle — only show if profiles exist */}
+                            {profiles.length > 0 && (
+                                <div className="flex gap-1 p-1 rounded-lg bg-muted w-fit">
+                                    {([
+                                        { key: 'manual', label: '✏️ Manuel' },
+                                        { key: 'profile', label: '👤 Profil' },
+                                    ] as const).map(m => (
+                                        <button
+                                            key={m.key}
+                                            type="button"
+                                            onClick={() => setCandidateMode(m.key)}
+                                            className={cn(
+                                                'px-3 py-1.5 rounded-md text-xs font-medium transition-all',
+                                                candidateMode === m.key
+                                                    ? 'bg-card text-foreground shadow-sm'
+                                                    : 'text-muted-foreground hover:text-foreground'
+                                            )}
+                                        >
+                                            {m.label}
+                                        </button>
+                                    ))}
+                                </div>
                             )}
 
-                            {selectedProfile && (
-                                <div className="rounded-lg bg-muted/50 border border-border p-3 flex flex-col gap-1.5">
-                                    <div className="flex items-center gap-2">
-                                        <div className="h-8 w-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-display shrink-0">
-                                            {selectedProfile.firstName.charAt(0)}{selectedProfile.lastName.charAt(0)}
-                                        </div>
-                                        <div>
-                                            <p className="text-sm font-medium">{selectedProfile.firstName} {selectedProfile.lastName}</p>
-                                            {selectedProfile.email && <p className="text-xs text-muted-foreground">{selectedProfile.email}</p>}
-                                        </div>
+                            {/* Manual entry */}
+                            {(candidateMode === 'manual' || profiles.length === 0) && (
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="flex flex-col gap-1.5">
+                                        <Label>Prénom *</Label>
+                                        <Input
+                                            value={manualFirstName}
+                                            onChange={e => setManualFirstName(e.target.value)}
+                                            placeholder="Jean"
+                                        />
                                     </div>
-                                    {selectedProfile.skills && (
-                                        <p className="text-[11px] text-muted-foreground truncate">
-                                            <span className="text-foreground/60 font-medium">Compétences : </span>{selectedProfile.skills}
-                                        </p>
-                                    )}
-                                    {selectedProfile.experiences.length > 0 && (
-                                        <p className="text-[11px] text-muted-foreground">
-                                            <span className="text-foreground/60 font-medium">{selectedProfile.experiences.length} exp.</span> incluse(s)
-                                        </p>
-                                    )}
+                                    <div className="flex flex-col gap-1.5">
+                                        <Label>Nom *</Label>
+                                        <Input
+                                            value={manualLastName}
+                                            onChange={e => setManualLastName(e.target.value)}
+                                            placeholder="Dupont"
+                                        />
+                                    </div>
                                 </div>
+                            )}
+
+                            {/* Profile picker */}
+                            {candidateMode === 'profile' && profiles.length > 0 && (
+                                <>
+                                    <Select value={selectedProfileId} onValueChange={setSelectedProfileId}>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Choisir un profil…" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {profiles.map(p => (
+                                                <SelectItem key={p.id} value={p.id}>
+                                                    <div className="flex flex-col">
+                                                        <span className="font-medium">{p.name}</span>
+                                                        <span className="text-xs text-muted-foreground">{p.firstName} {p.lastName}</span>
+                                                    </div>
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+
+                                    {selectedProfile && (
+                                        <div className="rounded-lg bg-muted/50 border border-border p-3 flex flex-col gap-1.5">
+                                            <div className="flex items-center gap-2">
+                                                <div className="h-8 w-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-display shrink-0">
+                                                    {selectedProfile.firstName.charAt(0)}{selectedProfile.lastName.charAt(0)}
+                                                </div>
+                                                <div>
+                                                    <p className="text-sm font-medium">{selectedProfile.firstName} {selectedProfile.lastName}</p>
+                                                    {selectedProfile.email && <p className="text-xs text-muted-foreground">{selectedProfile.email}</p>}
+                                                </div>
+                                            </div>
+                                            {selectedProfile.skills && (
+                                                <p className="text-[11px] text-muted-foreground truncate">
+                                                    <span className="text-foreground/60 font-medium">Compétences : </span>{selectedProfile.skills}
+                                                </p>
+                                            )}
+                                            {selectedProfile.experiences.length > 0 && (
+                                                <p className="text-[11px] text-muted-foreground">
+                                                    <span className="text-foreground/60 font-medium">{selectedProfile.experiences.length} exp.</span> incluse(s)
+                                                </p>
+                                            )}
+                                        </div>
+                                    )}
+                                </>
                             )}
                         </div>
 
@@ -885,7 +941,14 @@ export function CoverLettersPage() {
 
                         <div className="flex justify-between">
                             <Button variant="outline" onClick={() => setStep(1)}>Retour</Button>
-                            <Button onClick={goToStep3} disabled={!selectedProfileId}>
+                            <Button
+                                onClick={goToStep3}
+                                disabled={
+                                    candidateMode === 'profile'
+                                        ? !selectedProfileId
+                                        : !manualFirstName.trim() || !manualLastName.trim()
+                                }
+                            >
                                 Voir le prompt <ChevronRight className="h-4 w-4" />
                             </Button>
                         </div>
@@ -1007,7 +1070,17 @@ export function CoverLettersPage() {
                                 )}
 
                                 <div className="flex justify-between">
-                                    <Button variant="outline" size="sm" onClick={() => { abortRef.current?.abort(); resetWizard(); setMode('list') }}>
+                                    <Button variant="outline" size="sm" onClick={async () => {
+                                        // Invalidate any in-flight generation
+                                        generationIdRef.current++
+                                        // Delete the letter if it was already saved
+                                        if (savedLetterIdRef.current) {
+                                            await deleteLetter(savedLetterIdRef.current)
+                                            savedLetterIdRef.current = null
+                                        }
+                                        resetWizard()
+                                        setMode('list')
+                                    }}>
                                         <X className="h-4 w-4" /> Annuler sans enregistrer
                                     </Button>
                                     <Button variant="outline" size="sm" onClick={() => setStep(3)}>

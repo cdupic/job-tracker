@@ -58,6 +58,10 @@ export class LocalStorageCoverLetterRepository {
     async delete(id: string): Promise<void> {
         this.writeAll(this.readAll().filter(l => l.id !== id))
     }
+
+    async saveMany(letters: CoverLetter[]): Promise<void> {
+        this.writeAll(letters)
+    }
 }
 
 export const coverLetterRepository = new LocalStorageCoverLetterRepository()

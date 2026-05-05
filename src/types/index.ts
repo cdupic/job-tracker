@@ -95,14 +95,41 @@ export interface AppSettings {
   followUpDays: number
 }
 
-// v2 export format (includes column config)
 export interface ExportData {
   version: 2
+  exportedAt: string                    // ISO datetime
   columns: KanbanColumnConfig[]
   applications: JobApplication[]
   periods?: Period[]
   companies?: CompanyProfile[]
+  coverLetters?: CoverLetter[]          // NEW
+  settings?: {                          // NEW — user prefs (no API key)
+    followUpDays?: number
+    openRouterModel?: string
+  }
 }
+
+// NOTE: CoverLetter must also be declared in this file if not already.
+// Add this interface if it's not there yet:
+
+export interface CoverLetter {
+  id: string
+  title: string
+  company: string
+  companyId?: string
+  role: string
+  periodId?: string
+  jobId?: string
+  profileId?: string
+  jobTitle: string
+  jobContent: string
+  language: string
+  generatedContent: string
+  createdAt: string
+  updatedAt: string
+}
+
+
 
 // Default column IDs (stable, used for first-run initialisation)
 export const DEFAULT_COLUMN_IDS = [
@@ -144,19 +171,3 @@ export const COLUMN_COLOR_STYLES: Record<
 
 export const FALLBACK_COLOR_STYLE = COLUMN_COLOR_STYLES.gray
 
-export interface CoverLetter {
-  id: string
-  title: string
-  company: string
-  companyId?: string
-  role: string
-  periodId?: string
-  jobId?: string
-  profileId?: string
-  jobTitle: string
-  jobContent: string
-  language: string
-  generatedContent: string
-  createdAt: string
-  updatedAt: string
-}
