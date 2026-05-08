@@ -3,14 +3,17 @@ import { useSettings } from '@/hooks/useSettings'
 import { useJobs, useFullImport, type ImportStrategy } from '@/hooks/useJobs'
 import { usePeriods } from '@/hooks/usePeriods'
 import { useCompanies } from '@/hooks/useCompanies'
+import { useCoverLetters } from '@/hooks/useCoverLetters'
 import { toast } from '@/hooks/useToast'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { PeriodForm } from '@/components/periods/PeriodForm'
-import { ProfilesSettingsSection } from '@/components/profiles/ProfilesSettingsSection'
-import { OpenRouterSettingsSection } from '@/components/openrouter/OpenRouterSettingsSection'
+import { useOpenRouter, DEFAULT_MODEL } from '@/hooks/useOpenRouter'
+import type { JobMatchRecord } from '@/types'
+
+
 import { type ExportData, type Period, PERIOD_COLOR_STYLES, type PeriodColor } from '@/types'
 import {
   Download, Upload, Check, Loader2, Plus, Pencil,
@@ -78,9 +81,11 @@ function SectionHeader({ icon: Icon, title, description, action }: {
 
 export function SettingsPage() {
   const { settings, setSettings } = useSettings()
+  const { getApiKey, saveAndTestKey } = useOpenRouter()
   const { data: jobs = [] } = useJobs()
   const { data: periods = [] } = usePeriods()
   const { data: companies = [] } = useCompanies()
+  const { letters: coverLetters = [] } = useCoverLetters()
   const fullImport = useFullImport()
   const { columns, setColumns } = useKanbanConfig()
   const fileRef = useRef<HTMLInputElement>(null)
@@ -118,23 +123,42 @@ export function SettingsPage() {
   const [editingPeriod, setEditingPeriod] = useState<Period | null>(null)
 
   // ── Export ────────────────────────────────────────────────────────────────
-  function handleExport() {
+  async function handleExport() {
     const date = new Date().toISOString().split('T')[0]
 
     const filteredJobs = jobs.filter(
         (j) => !j.periodId || exportPeriodIds.has(j.periodId)
     )
     const filteredPeriods = periods.filter((p) => exportPeriodIds.has(p.id))
-
     const exportedCompanyIds = new Set(filteredJobs.map((j) => j.companyId).filter(Boolean))
     const filteredCompanies = companies.filter((c) => exportedCompanyIds.has(c.id))
 
+    // Profils et clé API
+    const apiKey = await getApiKey()
+    const rawProfiles = (() => {
+      try { return JSON.parse(localStorage.getItem('jat_candidate_profiles') ?? '[]') } catch { return [] }
+    })()
+
+    const rawMatches = (() => {
+      try { return JSON.parse(localStorage.getItem('jat_job_matches') ?? '[]') } catch { return [] }
+    })()
+
     const exportData: ExportData = {
       version: 2,
+      exportedAt: new Date().toISOString(),
       columns,
       applications: filteredJobs,
       periods: filteredPeriods,
       companies: filteredCompanies,
+      jobMatches: rawMatches,   // NEW
+
+      profiles: rawProfiles,
+      coverLetters,
+      settings: {
+        followUpDays: settings.followUpDays,
+        openRouterModel: localStorage.getItem('jat_or_model') ?? undefined,
+        ...(apiKey ? { openRouterApiKey: apiKey } : {}),
+      },
     }
 
     const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' })
@@ -149,7 +173,6 @@ export function SettingsPage() {
       description: t.toast.exportedDesc(filteredJobs.length),
     })
   }
-
   // ── Import parsing ────────────────────────────────────────────────────────
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -160,7 +183,7 @@ export function SettingsPage() {
         const parsed = JSON.parse(ev.target?.result as string) as any
         if (Array.isArray(parsed)) {
           setImportConfirm({
-            data: { version: 2, columns, applications: parsed, periods: [], companies: [] },
+            data: { version: 2, exportedAt: new Date().toISOString(), columns, applications: parsed, periods: [], companies: [] },
             isV2: false,
           })
         } else if (parsed.version === 2 && Array.isArray(parsed.applications)) {
@@ -181,13 +204,23 @@ export function SettingsPage() {
     const { data, isV2 } = importConfirm
     await fullImport.mutateAsync({ data, isV2, strategy })
     if (isV2 && data.columns?.length) setColumns(data.columns)
+
+    // Import de la clé API OpenRouter (re-chiffrement sur cet appareil)
+    if (isV2 && data.settings?.openRouterApiKey) {
+      const shouldImportKey =
+          strategy === 'replace' ||
+          !(localStorage.getItem('jat_or_key_enc')) // merge : uniquement si pas déjà de clé
+      if (shouldImportKey) {
+        await saveAndTestKey(data.settings.openRouterApiKey)
+      }
+    }
+
     toast({
       title: t.toast.imported,
       description: t.toast.importedDesc(data.applications.length),
     })
     setImportConfirm(null)
   }
-
   const previewJobCount = jobs.filter(
       (j) => !j.periodId || exportPeriodIds.has(j.periodId)
   ).length
@@ -429,6 +462,8 @@ export function SettingsPage() {
                               importConfirm.data.applications.length,
                               importConfirm.data.periods?.length ?? 0,
                               importConfirm.data.companies?.length ?? 0,
+                              importConfirm.data.profiles?.length ?? 0,
+                              importConfirm.data.coverLetters?.length ?? 0
                           )}
                         </p>
                       </div>
@@ -510,12 +545,10 @@ export function SettingsPage() {
 import { useState as useState2 } from 'react'
 import { useProfiles, type CandidateProfile } from '@/hooks/useProfiles'
 import { ProfileForm } from '@/components/profiles/ProfileForm'
-import { useOpenRouter, DEFAULT_MODEL, type OpenRouterModel, type ApiKeyStatus } from '@/hooks/useOpenRouter'
 import {
   Eye, EyeOff, X as XIco, RefreshCw, Search, Zap, Lock, Unlock, Trash2 as Trash2i,
   ExternalLink,
 } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
 import { useMemo } from 'react'
 
 function ProfilesSettingsSectionBody() {

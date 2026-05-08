@@ -60,10 +60,14 @@ const fr = {
         exportPeriodsAll2: 'Toutes les périodes',
         exportPeriodsFootnote: 'Les candidatures sans période sont toujours incluses.',
         importFileDetected: 'Fichier détecté',
-        importFileContent: (apps: number, periods: number, companies: number) => {
-            const parts = [`${apps} candidature${apps > 1 ? 's' : ''}`]
-            if (periods > 0) parts.push(`${periods} période${periods > 1 ? 's' : ''}`)
-            if (companies > 0) parts.push(`${companies} entreprise${companies > 1 ? 's' : ''}`)
+        importFileContent: (apps: number, periods: number, companies: number, profiles: number, coverLetters: number, matches: number = 0) => {
+            const parts = []
+            if (apps > 0) parts.push(`${apps} candidatures`)
+            if (periods > 0) parts.push(`${periods} périodes`)
+            if (companies > 0) parts.push(`${companies} entreprises`)
+            if (profiles > 0) parts.push(`${profiles} profils`)
+            if (coverLetters > 0) parts.push(`${coverLetters} lettres`)
+            if (matches > 0) parts.push(`${matches} analyses/roadmaps`)
             return parts.join(', ') + ' dans ce fichier. Comment voulez-vous procéder\u00a0?'
         },
         importMergeTitle: 'Fusionner',
@@ -71,6 +75,16 @@ const fr = {
         importReplaceTitle: 'Remplacer tout',
         importReplaceDesc: 'Efface toutes vos données actuelles et les remplace par le fichier.',
         importCancel: 'Annuler',
+        profilesTitle: 'Profils candidat',
+        profilesDesc: 'Informations pré-remplies pour la génération de mails de relance',
+        aiTitle: 'OpenRouter — IA',
+        aiDesc: 'Clé API et modèle pour la génération des emails de relance',
+        exportItems: 'Éléments à exporter :',
+        exportApps: 'Candidatures, périodes et entreprises',
+        exportProfiles: 'Profils candidats',
+        exportLetters: 'Lettres de motivation',
+        exportMatches: 'Analyses de CV et Roadmaps',
+        exportSettings: 'Paramètres et Clé API',
     },
     periods: {
         settingsSection: 'Périodes de candidature',
@@ -263,10 +277,14 @@ const en: Translations = {
         exportPeriodsAll2: 'All periods',
         exportPeriodsFootnote: 'Applications without a period are always included.',
         importFileDetected: 'File detected',
-        importFileContent: (apps: number, periods: number, companies: number) => {
-            const parts = [`${apps} application${apps > 1 ? 's' : ''}`]
-            if (periods > 0) parts.push(`${periods} period${periods > 1 ? 's' : ''}`)
-            if (companies > 0) parts.push(`${companies} company`, `${companies > 1 ? 'companies' : 'company'}`)
+        importFileContent: (apps: number, periods: number, companies: number, profiles: number, coverLetters: number, matches: number = 0) => {
+            const parts = []
+            if (apps > 0) parts.push(`${apps} applications`)
+            if (periods > 0) parts.push(`${periods} periods`)
+            if (companies > 0) parts.push(`${companies} companies`)
+            if (profiles > 0) parts.push(`${profiles} profiles`)
+            if (coverLetters > 0) parts.push(`${coverLetters} cover letters`)
+            if (matches > 0) parts.push(`${matches} match analyses`)
             return parts.join(', ') + ' in this file. How do you want to proceed?'
         },
         importMergeTitle: 'Merge',
@@ -274,6 +292,16 @@ const en: Translations = {
         importReplaceTitle: 'Replace all',
         importReplaceDesc: 'Erases all your current data and replaces it with the file.',
         importCancel: 'Cancel',
+        profilesTitle: 'Candidate profiles',
+        profilesDesc: 'Pre-filled information for follow-up emails generation',
+        aiTitle: 'OpenRouter — AI',
+        aiDesc: 'API key and model for follow-up emails generation',
+        exportItems: 'Items to export:',
+        exportApps: 'Applications, periods and companies',
+        exportProfiles: 'Candidate profiles',
+        exportLetters: 'Cover letters',
+        exportMatches: 'Resume analyses and Roadmaps',
+        exportSettings: 'Settings and API Key',
     },
     periods: {
         settingsSection: 'Application periods',
@@ -464,10 +492,14 @@ const de: Translations = {
         exportPeriodsAll2: 'Alle Phasen',
         exportPeriodsFootnote: 'Bewerbungen ohne Phase werden immer exportiert.',
         importFileDetected: 'Datei erkannt',
-        importFileContent: (apps: number, periods: number, companies: number) => {
-            const parts = [`${apps} Bewerbung${apps > 1 ? 'en' : ''}`]
+        importFileContent: (apps: number, periods: number, companies: number, profiles: number, coverLetters: number, matches: number = 0) => {
+            const parts = []
+            if (apps > 0) parts.push(`${apps} Bewerbung${apps > 1 ? 'en' : ''}`)
             if (periods > 0) parts.push(`${periods} Phase${periods > 1 ? 'n' : ''}`)
             if (companies > 0) parts.push(`${companies} Unternehmen`)
+            if (profiles > 0) parts.push(`${profiles} Profil${profiles > 1 ? 'e' : ''}`)
+            if (coverLetters > 0) parts.push(`${coverLetters} Anschreiben`)
+            if (matches > 0) parts.push(`${matches} Analysen/Roadmaps`)
             return parts.join(', ') + ' in dieser Datei. Wie möchten Sie vorgehen?'
         },
         importMergeTitle: 'Zusammenführen',
@@ -475,6 +507,16 @@ const de: Translations = {
         importReplaceTitle: 'Alles ersetzen',
         importReplaceDesc: 'Löscht alle vorhandenen Daten und ersetzt sie durch die Datei.',
         importCancel: 'Abbrechen',
+        profilesTitle: 'Bewerberprofile',
+        profilesDesc: 'Vorausgefüllte Informationen für die Generierung von Nachfass-Mails',
+        aiTitle: 'OpenRouter — KI',
+        aiDesc: 'API-Schlüssel und Modell für die Generierung von Nachfass-Mails',
+        exportItems: 'Zu exportierende Elemente:',
+        exportApps: 'Bewerbungen, Phasen und Unternehmen',
+        exportProfiles: 'Bewerberprofile',
+        exportLetters: 'Anschreiben',
+        exportMatches: 'Lebenslauf-Analysen und Roadmaps',
+        exportSettings: 'Einstellungen und API-Schlüssel',
     },
     periods: {
         settingsSection: 'Bewerbungsphasen',
